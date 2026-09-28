@@ -23,3 +23,10 @@ env/
 # IDE
 .idea/
 .vscode/
+
+# Generated reports / cache
+cache/
+report_*.json
+
+# Test / tooling caches
+.pytest_cache/

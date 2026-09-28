@@ -233,8 +233,11 @@ def call_verifier(system_prompt: str, user_prompt: str, max_tokens: int = 1500) 
             ],
             temperature=0.1,
             max_tokens=max_tokens,
+            # Groq's native JSON mode — the docstring always claimed we used it,
+            # but the parameter was never actually passed.
+            response_format={"type": "json_object"},
         )
-        raw = response.choices[0].message.content.strip()
+        raw = (response.choices[0].message.content or "").strip()
     except Exception as e:
         raise RuntimeError(f"Groq verifier call failed: {e}")
 
@@ -1033,7 +1036,7 @@ Return ONLY this JSON:
 
     # Guardrail is structured JSON — 8B model is sufficient and saves 70B daily quota
     result = call_groq(prompt, model=FAST_MODEL, max_tokens=4096)
-    result = _enrich_guardrail_data(result, reviews, sentiment)
+    result = _derive_guardrail_fallbacks(result, reviews, sentiment)
 
     ai_flags  = result.get("suspicious_patterns", [])
     all_flags = list(dict.fromkeys(heuristic_flags + ai_flags))
@@ -1051,84 +1054,114 @@ Return ONLY this JSON:
     return result
 
 
-def _enrich_guardrail_data(result: dict, reviews: list, sentiment: dict) -> dict:
-    """Ensure genuine_positives, genuine_concerns, and verified_facts are richly populated with review extractions."""
+def _derive_guardrail_fallbacks(result: dict, reviews: list, sentiment: dict) -> dict:
+    """
+    Fill *structurally* missing guardrail fields with clearly-labelled derivations
+    from data we actually have.
+
+    HARD RULE: nothing in here may invent an observation, a confidence, or a
+    severity. If the guardrail model did not produce a field we either derive it
+    from Model 1's own output (and mark it `derived: True`) or leave it empty.
+    An empty section is honest; a fabricated one is not.
+    """
     if not isinstance(result, dict):
         result = {}
 
-    positives = result.get("genuine_positives", [])
-    concerns = result.get("genuine_concerns", [])
-    
-    # 1. Enrich genuine positives if empty or unpopulated
-    if not positives or len(positives) == 0:
-        extracted_pos = []
-        for i, pt in enumerate(sentiment.get("positive_points", [])):
-            if isinstance(pt, dict):
-                claim = pt.get("claim", "")
-                aspect = pt.get("aspect") or (claim.split(" - ")[0] if " - " in claim else claim[:35])
-                ids = pt.get("evidence_review_ids", [f"r{i+1}"])
-                extracted_pos.append({
-                    "aspect": aspect,
-                    "evidence": claim,
-                    "confidence": round(0.92 - (i * 0.04), 2),
-                    "supporting_review_ids": ids if ids else [f"r{i+1}"]
-                })
-        if not extracted_pos:
-            for i, r in enumerate(reviews):
-                if r.get("rating", 0) >= 4 and r.get("text"):
-                    extracted_pos.append({
-                        "aspect": "Verified Customer Praise",
-                        "evidence": r["text"][:150],
-                        "confidence": 0.88,
-                        "supporting_review_ids": [f"r{i+1}"]
-                    })
-                if len(extracted_pos) >= 4:
-                    break
-        result["genuine_positives"] = extracted_pos
+    # 1. genuine_positives — derive from Model 1's positive_points only.
+    #    No synthetic confidence: unknown confidence stays None.
+    if not result.get("genuine_positives"):
+        derived_pos = []
+        for pt in sentiment.get("positive_points", []):
+            if not isinstance(pt, dict):
+                continue
+            claim  = pt.get("claim", "")
+            aspect = pt.get("aspect") or (claim.split(" - ")[0] if " - " in claim else claim[:35])
+            derived_pos.append({
+                "aspect":                aspect,
+                "evidence":              claim,
+                "confidence":            None,          # not assessed by the guardrail model
+                "supporting_review_ids": pt.get("evidence_review_ids") or [],
+                "derived":               True,
+                "source":                "Model 1 sentiment (guardrail returned none)",
+            })
+        result["genuine_positives"] = derived_pos
 
-    # 2. Enrich genuine concerns if empty or unpopulated
-    if not concerns or len(concerns) == 0:
-        extracted_con = []
-        for i, pt in enumerate(sentiment.get("negative_points", [])):
-            if isinstance(pt, dict):
-                claim = pt.get("claim", "")
-                aspect = pt.get("aspect") or (claim.split(" - ")[0] if " - " in claim else claim[:35])
-                ids = pt.get("evidence_review_ids", [f"r{i+1}"])
-                extracted_con.append({
-                    "aspect": aspect,
-                    "evidence": claim,
-                    "severity": "Moderate" if i == 0 else "Minor",
-                    "supporting_review_ids": ids if ids else [f"r{i+1}"]
-                })
-        if not extracted_con:
-            for i, r in enumerate(reviews):
-                if r.get("rating", 0) <= 3 and r.get("text"):
-                    extracted_con.append({
-                        "aspect": "Reported Customer Concern",
-                        "evidence": r["text"][:150],
-                        "severity": "Major" if r.get("rating", 0) == 1 else "Moderate",
-                        "supporting_review_ids": [f"r{i+1}"]
-                    })
-                if len(extracted_con) >= 3:
-                    break
-        result["genuine_concerns"] = extracted_con
+    # 2. genuine_concerns — same treatment. Severity is NOT guessed.
+    if not result.get("genuine_concerns"):
+        derived_con = []
+        for pt in sentiment.get("negative_points", []):
+            if not isinstance(pt, dict):
+                continue
+            claim  = pt.get("claim", "")
+            aspect = pt.get("aspect") or (claim.split(" - ")[0] if " - " in claim else claim[:35])
+            derived_con.append({
+                "aspect":                aspect,
+                "evidence":              claim,
+                "severity":              None,          # not assessed by the guardrail model
+                "supporting_review_ids": pt.get("evidence_review_ids") or [],
+                "derived":               True,
+                "source":                "Model 1 sentiment (guardrail returned none)",
+            })
+        result["genuine_concerns"] = derived_con
 
-    # 3. Verified facts
+    # 3. verified_facts — only statements computed directly from the review data.
+    #    These are arithmetic, not model claims, so they are safe to state.
     if not result.get("verified_facts"):
         facts = []
-        ratings = [r.get("rating", 0) for r in reviews if r.get("rating")]
+        ratings = [r.get("rating") for r in reviews if r.get("rating")]
         if ratings:
-            facts.append(f"Average rating of analyzed sample is {sum(ratings)/len(ratings):.1f}★ across {len(reviews)} reviews.")
+            facts.append(
+                f"Average rating of the analyzed sample is "
+                f"{sum(ratings)/len(ratings):.1f}\u2605 across {len(reviews)} reviews."
+            )
         if sentiment.get("positive_keywords"):
-            facts.append(f"Top verified positive customer descriptors: {', '.join(sentiment['positive_keywords'][:4])}.")
+            facts.append(
+                "Positive keywords extracted by Model 1: "
+                + ", ".join(sentiment["positive_keywords"][:4]) + "."
+            )
         if sentiment.get("negative_keywords"):
-            facts.append(f"Top critical customer mentions: {', '.join(sentiment['negative_keywords'][:3])}.")
+            facts.append(
+                "Critical keywords extracted by Model 1: "
+                + ", ".join(sentiment["negative_keywords"][:3]) + "."
+            )
         result["verified_facts"] = facts
 
     return result
 
 
 # ── MODULE 4: Model 2 (Model B) — Groq Independent Verifier ──────────────────
+
+# The five claim families Model 2 is asked to audit.
+VERIFIED_FIELDS = ("sentiment", "aspects", "keywords", "guardrail", "evidence")
+
+# Overall statuses. UNAVAILABLE means the verifier never produced a usable answer;
+# UNKNOWN means it answered but with a status we don't recognise.
+VERIFICATION_STATUSES = ("PASS", "CORRECTED", "FAIL", "UNAVAILABLE", "UNKNOWN")
+
+# Statuses that represent a real, completed independent audit.
+VERIFICATION_COMPLETED = ("PASS", "CORRECTED", "FAIL")
+
+
+def _log_verification(result: dict, note: str = "") -> None:
+    """Print a verification summary that never implies more than actually happened."""
+    status   = result.get("verification_status", "UNKNOWN")
+    acc      = result.get("accuracy")
+    acc_str  = f"{acc:.0%}" if isinstance(acc, (int, float)) else "not reported"
+    hall     = result.get("hallucination_detected")
+    hall_str = "unknown" if hall is None else str(hall)
+    n_corr   = len(result.get("corrections", []))
+    n_ok     = len(result.get("fields_checked", []))
+    suffix   = f" ({note})" if note else ""
+    colour   = "green" if status in VERIFICATION_COMPLETED else "yellow"
+    console.print(
+        f"[{colour}]✓  Model 2 Verifier (Groq){suffix}: {status}  |  "
+        f"Fields audited: {n_ok}/{len(VERIFIED_FIELDS)}  |  Self-reported accuracy: {acc_str}  |  "
+        f"Hallucination: {hall_str}  |  Corrections: {n_corr}[/{colour}]"
+    )
+    unchecked = result.get("fields_unchecked", [])
+    if unchecked:
+        console.print(f"[dim]   Unchecked fields (verifier said nothing usable): {', '.join(unchecked)}[/dim]")
+
 
 VERIFIER_SYSTEM_PROMPT = """You are Model 2 (Independent Verifier), cross-auditing Model 1's analysis against real Google Maps reviews.
 Do NOT assume Model 1 is correct. Extract factual observations directly from the review text for each field.
@@ -1260,16 +1293,8 @@ OUTPUT ONLY THE JSON BELOW. DO NOT include any explanation, reasoning, or markdo
 RULES: Only correct claims unsupported by review text. Every correction needs evidence_review_ids. No recommendation."""
 
     try:
-        result = call_verifier(VERIFIER_SYSTEM_PROMPT, user_prompt, max_tokens=1500)
-        result = _enrich_verification_data(result, reviews, model_a_sentiment, model_a_guardrail)
-        status   = result.get("verification_status", "UNKNOWN")
-        accuracy = result.get("accuracy", 0)
-        hall     = result.get("hallucination_detected", False)
-        n_corr   = len(result.get("corrections", []))
-        console.print(
-            f"[green]✓  Model 2 Verifier (Groq): {status}  |  Accuracy: {accuracy:.0%}  |  "
-            f"Hallucination: {hall}  |  Corrections: {n_corr}[/green]"
-        )
+        result = _normalise_verification(call_verifier(VERIFIER_SYSTEM_PROMPT, user_prompt, max_tokens=1500))
+        _log_verification(result)
         return result
     except RuntimeError as e:
         err_msg = str(e)
@@ -1278,142 +1303,110 @@ RULES: Only correct claims unsupported by review text. Every correction needs ev
             retry_list = review_list[:10]
             retry_prompt = user_prompt.replace(json.dumps(review_list, indent=2), json.dumps(retry_list, indent=2))
             try:
-                result = call_verifier(VERIFIER_SYSTEM_PROMPT, retry_prompt, max_tokens=1500)
-                result = _enrich_verification_data(result, reviews, model_a_sentiment, model_a_guardrail)
-                status   = result.get("verification_status", "UNKNOWN")
-                accuracy = result.get("accuracy", 0)
-                hall     = result.get("hallucination_detected", False)
-                n_corr   = len(result.get("corrections", []))
-                console.print(
-                    f"[green]✓  Model 2 Verifier (Groq, 10 reviews): {status}  |  Accuracy: {accuracy:.0%}  |  "
-                    f"Hallucination: {hall}  |  Corrections: {n_corr}[/green]"
+                result = _normalise_verification(
+                    call_verifier(VERIFIER_SYSTEM_PROMPT, retry_prompt, max_tokens=1500)
                 )
+                _log_verification(result, note="10-review retry")
                 return result
             except RuntimeError as e2:
                 console.print(f"[yellow]⚠  Model 2 unavailable: {e2}[/yellow]")
-                return _enrich_verification_data(_unavailable_verification(str(e2)), reviews, model_a_sentiment, model_a_guardrail)
+                return _unavailable_verification(str(e2))
         
         console.print(f"[yellow]⚠  Model 2 unavailable: {e}[/yellow]")
-        return _enrich_verification_data(_unavailable_verification(str(e)), reviews, model_a_sentiment, model_a_guardrail)
+        return _unavailable_verification(str(e))
 
 
-def _enrich_verification_data(verif: dict, reviews: list, sentiment: dict, guardrail: dict) -> dict:
-    """Ensure all 5 verification fields have valid status and rich observations extracted from reviews."""
+def _normalise_verification(verif: dict) -> dict:
+    """
+    Normalise the verifier's raw JSON into the shape the rest of the app expects.
+
+    HARD RULE: this function must never invent an observation, a status, or an
+    accuracy figure. Fields the verifier did not report are marked UNCHECKED with
+    empty observations. A blank audit is an honest audit; a synthetic one silently
+    turns "we could not verify this" into "we verified this".
+    """
     if not isinstance(verif, dict):
         verif = {}
 
-    v_status = verif.get("verification_status") or verif.get("status") or "PASS"
-    verif["verification_status"] = v_status
-    verif["status"] = v_status
+    status = verif.get("verification_status") or verif.get("status") or "UNKNOWN"
+    if status not in VERIFICATION_STATUSES:
+        status = "UNKNOWN"
+    verif["verification_status"] = status
+    verif["status"] = status
 
-    if verif.get("accuracy") is None:
-        verif["accuracy"] = 0.94
+    acc = verif.get("accuracy")
+    verif["accuracy"] = float(acc) if isinstance(acc, (int, float)) else None
 
-    if verif.get("hallucination_detected") is None:
-        verif["hallucination_detected"] = False
+    if not isinstance(verif.get("hallucination_detected"), bool):
+        verif["hallucination_detected"] = None   # unknown, not False
 
-    # Review analytics for ground-truth extraction
-    ratings = [r.get("rating", 0) for r in reviews if r.get("rating")]
-    avg_r = sum(ratings) / len(ratings) if ratings else 0
-    pos_reviews = [r for r in reviews if r.get("rating", 0) >= 4]
-    neg_reviews = [r for r in reviews if r.get("rating", 0) <= 2]
+    corrections = verif.get("corrections")
+    verif["corrections"] = corrections if isinstance(corrections, list) else []
 
-    # 1. Sentiment
-    sent_dict = verif.get("sentiment") if isinstance(verif.get("sentiment"), dict) else {}
-    if not sent_dict.get("status") or sent_dict.get("status") == "UNAVAILABLE":
-        sent_dict["status"] = "PASS"
-    if not sent_dict.get("observations"):
-        overall = sentiment.get("overall_sentiment", "Positive")
-        sent_dict["observations"] = [
-            f"Review ratings average {avg_r:.1f}★ across {len(reviews)} reviews ({len(pos_reviews)} positive, {len(neg_reviews)} critical).",
-            f"Model 1 overall sentiment '{overall}' accurately aligns with reviewer sentiment distribution.",
-        ]
-    if "issues" not in sent_dict:
-        sent_dict["issues"] = []
-    verif["sentiment"] = sent_dict
+    checked_fields, unchecked_fields = [], []
+    for field in VERIFIED_FIELDS:
+        fdata = verif.get(field)
+        if not isinstance(fdata, dict):
+            fdata = {}
 
-    # 2. Aspects
-    asp_dict = verif.get("aspects") if isinstance(verif.get("aspects"), dict) else {}
-    if not asp_dict.get("status") or asp_dict.get("status") == "UNAVAILABLE":
-        asp_dict["status"] = "PASS"
-    if not asp_dict.get("observations"):
-        aspect_scores = sentiment.get("aspect_scores", {})
-        asp_obs = []
-        for asp_k, asp_v in list(aspect_scores.items())[:3]:
-            if isinstance(asp_v, dict) and asp_v.get("score") is not None:
-                asp_obs.append(f"{asp_k.replace('_', ' ').title()}: score {asp_v.get('score')}/10 confirmed across {asp_v.get('reviews_mentioning', 1)} review mention(s).")
-        if not asp_obs:
-            asp_obs.append("Food quality, service speed, and ambience dimensions match reviewer statements.")
-        asp_dict["observations"] = asp_obs
-    if "issues" not in asp_dict:
-        asp_dict["issues"] = []
-    verif["aspects"] = asp_dict
+        obs = [o for o in (fdata.get("observations") or []) if isinstance(o, str) and o.strip()]
+        issues = [i for i in (fdata.get("issues") or []) if i]
 
-    # 3. Keywords
-    kw_dict = verif.get("keywords") if isinstance(verif.get("keywords"), dict) else {}
-    if not kw_dict.get("status") or kw_dict.get("status") == "UNAVAILABLE":
-        kw_dict["status"] = "PASS"
-    if not kw_dict.get("observations"):
-        pos_kw = sentiment.get("positive_keywords", [])[:4]
-        neg_kw = sentiment.get("negative_keywords", [])[:3]
-        kw_obs = []
-        if pos_kw:
-            kw_obs.append(f"Frequent positive terms verified in reviews: {', '.join(pos_kw)}.")
-        if neg_kw:
-            kw_obs.append(f"Criticism terms verified in reviews: {', '.join(neg_kw)}.")
-        if not kw_obs:
-            kw_obs.append("Extracted key terms match natural customer vocabulary in reviews.")
-        kw_dict["observations"] = kw_obs
-    if "issues" not in kw_dict:
-        kw_dict["issues"] = []
-    verif["keywords"] = kw_dict
+        fstatus = fdata.get("status")
+        if fstatus not in ("PASS", "CORRECTED", "FAIL"):
+            # The verifier said nothing usable about this field — say so.
+            fstatus = "UNCHECKED"
 
-    # 4. Guardrail
-    gr_dict = verif.get("guardrail") if isinstance(verif.get("guardrail"), dict) else {}
-    if not gr_dict.get("status") or gr_dict.get("status") == "UNAVAILABLE":
-        gr_dict["status"] = "PASS"
-    if not gr_dict.get("observations"):
-        trust_score = guardrail.get("trust_score", 85)
-        fake_prob = guardrail.get("fake_review_probability", 0.05)
-        gr_dict["observations"] = [
-            f"Review authenticity trust score confirmed at {trust_score}% (anomaly probability: {fake_prob:.1%}).",
-            f"Checked {len(reviews)} reviews for repetitive templated phrasing; organic natural reviews confirmed.",
-        ]
-    if "issues" not in gr_dict:
-        gr_dict["issues"] = []
-    verif["guardrail"] = gr_dict
+        fdata["status"] = fstatus
+        fdata["observations"] = obs
+        fdata["issues"] = issues
+        if field == "evidence":
+            fdata["unsupported_claims"] = fdata.get("unsupported_claims") or []
+        verif[field] = fdata
 
-    # 5. Evidence
-    ev_dict = verif.get("evidence") if isinstance(verif.get("evidence"), dict) else {}
-    if not ev_dict.get("status") or ev_dict.get("status") == "UNAVAILABLE":
-        ev_dict["status"] = "PASS"
-    if not ev_dict.get("observations"):
-        ev_dict["observations"] = [
-            f"Direct citations mapped to {min(len(reviews), 20)} review IDs with no hallucinated user claims.",
-            "All pros and cons are substantiated by verifiable reviewer quotes.",
-        ]
-    if "issues" not in ev_dict:
-        ev_dict["issues"] = ev_dict.get("unsupported_claims", [])
-    if "unsupported_claims" not in ev_dict:
-        ev_dict["unsupported_claims"] = []
-    verif["evidence"] = ev_dict
+        (unchecked_fields if fstatus == "UNCHECKED" else checked_fields).append(field)
+
+    verif["fields_checked"]   = checked_fields
+    verif["fields_unchecked"] = unchecked_fields
+    verif["coverage"]         = round(len(checked_fields) / len(VERIFIED_FIELDS), 2)
+
+    if not verif.get("verification_notes"):
+        if unchecked_fields:
+            verif["verification_notes"] = (
+                f"Verifier reported on {len(checked_fields)}/{len(VERIFIED_FIELDS)} fields; "
+                f"unchecked: {', '.join(unchecked_fields)}."
+            )
+        else:
+            verif["verification_notes"] = "Verifier reported on all fields."
 
     return verif
 
 
 def _unavailable_verification(reason: str) -> dict:
+    """
+    Build an honest 'this did not run' payload.
+
+    Previously this returned status=PASS with accuracy=0.92, which meant a verifier
+    that crashed, timed out, or was never configured still rendered as a green
+    92%-accurate independent audit, and made REQUIRE_VERIFICATION unreachable.
+    """
+    blank = lambda: {"status": "UNCHECKED", "observations": [], "issues": []}
     return {
-        "verification_status": "PASS",
-        "accuracy":            0.92,
-        "reason":              reason,
-        "sentiment":           {"status": "PASS", "observations": [], "issues": []},
-        "aspects":             {"status": "PASS", "observations": [], "issues": []},
-        "keywords":            {"status": "PASS", "observations": [], "issues": []},
-        "guardrail":           {"status": "PASS", "observations": [], "issues": []},
-        "evidence":            {"status": "PASS", "observations": [], "unsupported_claims": [], "issues": []},
-        "hallucination_detected": False,
-        "corrections":         [],
-        "verification_notes":  "Independent review verification completed via direct review extraction.",
+        "verification_status":    "UNAVAILABLE",
+        "status":                 "UNAVAILABLE",
+        "accuracy":               None,
+        "reason":                 reason,
+        "sentiment":              blank(),
+        "aspects":                blank(),
+        "keywords":               blank(),
+        "guardrail":              blank(),
+        "evidence":               {**blank(), "unsupported_claims": []},
+        "hallucination_detected": None,
+        "corrections":            [],
+        "fields_checked":         [],
+        "fields_unchecked":       list(VERIFIED_FIELDS),
+        "coverage":               0.0,
+        "verification_notes":     f"Independent verification did not run: {reason}",
     }
 
 
@@ -1429,8 +1422,8 @@ def apply_corrections(sentiment: dict, guardrail: dict, verification: dict) -> t
     - Never apply a correction without review evidence.
     - Does not change the final score (that is Python's job).
     """
-    if not verification or verification.get("verification_status") in ("PASS", "UNAVAILABLE"):
-        # No corrections needed or verifier unavailable — use Model A as-is
+    if not verification or verification.get("verification_status") not in VERIFICATION_COMPLETED:
+        # Verifier never completed — nothing trustworthy to apply
         return sentiment.copy(), guardrail.copy()
 
     corrections = verification.get("corrections", [])
@@ -1581,29 +1574,42 @@ def calculate_final_score(
         rating_comp = round(avg_scraped * 2, 2)
 
     # ── 4. Trust/guardrail component (0-10) ──
-    trust_score = guardrail.get("trust_score", 0.7)
-    fake_prob   = guardrail.get("fake_review_probability", 0.2)
-    # Penalise high fake probability
+    # Unknown trust is NEUTRAL (0.5), not optimistic (0.7): absence of evidence
+    # about authenticity is not evidence of authenticity.
+    trust_score = guardrail.get("trust_score")
+    trust_score = trust_score if isinstance(trust_score, (int, float)) else 0.5
+    fake_prob   = guardrail.get("fake_review_probability")
+    fake_prob   = fake_prob if isinstance(fake_prob, (int, float)) else 0.2
     trust_comp  = round((trust_score - fake_prob * 0.5) * 10, 2)
     trust_comp  = max(0.0, min(10.0, trust_comp))
 
-    # Apply verifier accuracy as a modifier on trust
-    if verification.get("verification_status") not in ("UNAVAILABLE", None):
-        verif_accuracy = verification.get("accuracy") or 1.0
-        trust_comp     = round(trust_comp * (0.5 + verif_accuracy * 0.5), 2)
-        trust_comp     = max(0.0, min(10.0, trust_comp))
+    # Verification modifier. A completed audit that self-reports an accuracy scales
+    # trust by it; a run where verification did NOT happen is discounted rather
+    # than silently treated as a clean pass.
+    v_status  = verification.get("verification_status")
+    verif_acc = verification.get("accuracy")
+    if v_status in VERIFICATION_COMPLETED and isinstance(verif_acc, (int, float)):
+        trust_comp = round(trust_comp * (0.5 + verif_acc * 0.5), 2)
+    elif v_status not in VERIFICATION_COMPLETED:
+        trust_comp = round(trust_comp * 0.85, 2)   # unverified → discounted, never boosted
+    trust_comp = max(0.0, min(10.0, trust_comp))
 
     # ── 5. Guardrail risk penalties ──
+    # Only concerns the guardrail model actually graded contribute. Concerns we
+    # merely derived from Model 1's sentiment carry severity=None and are skipped
+    # here — they are already reflected in sentiment_comp, so charging for them
+    # again would double-count the same signal.
     risk_penalty = 0.0
     concerns     = guardrail.get("genuine_concerns", [])
     for c in concerns:
-        if not isinstance(c, dict): continue
-        sev = c.get("severity", "Minor")
+        if not isinstance(c, dict) or c.get("derived"):
+            continue
+        sev = c.get("severity")
         if sev == "Major":
             risk_penalty += 1.5
         elif sev == "Moderate":
             risk_penalty += 0.8
-        else:
+        elif sev == "Minor":
             risk_penalty += 0.2
     # Also penalise from verification corrections
     for corr in verification.get("corrections", []):
@@ -1661,15 +1667,21 @@ def calculate_final_score(
         base_conf = min(1.0, base_conf + 0.15)
     if trust_score >= 0.8:
         base_conf = min(1.0, base_conf + 0.1)
-    v_status = verification.get("verification_status")
+    # Verification affects confidence only in proportion to how much was actually
+    # audited. `coverage` is the fraction of the 5 claim families the verifier
+    # genuinely reported on — a payload full of UNCHECKED fields earns no bonus.
+    coverage = verification.get("coverage")
+    coverage = coverage if isinstance(coverage, (int, float)) else 0.0
     if v_status == "PASS":
-        base_conf = min(1.0, base_conf + 0.1)
-        verif_acc = verification.get("accuracy") or 1.0
-        base_conf = min(1.0, base_conf * (0.7 + verif_acc * 0.3))
-    elif v_status == "UNAVAILABLE":
-        base_conf = max(0.0, base_conf - 0.1)   # slight penalty without verification
+        base_conf = min(1.0, base_conf + 0.1 * coverage)
+        if isinstance(verif_acc, (int, float)):
+            base_conf = min(1.0, base_conf * (0.7 + verif_acc * 0.3))
     elif v_status == "CORRECTED":
         base_conf = max(0.0, base_conf - 0.05)
+    elif v_status == "FAIL":
+        base_conf = max(0.0, base_conf - 0.2)
+    else:   # UNAVAILABLE / UNKNOWN — nothing was independently checked
+        base_conf = max(0.0, base_conf - 0.15)
     confidence = round(base_conf, 3)
 
     score_breakdown = {
@@ -1895,7 +1907,7 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
       1. Apify — scrape reviews
       2. Model A (Groq) — sentiment analysis  [batched, all reviews]
       3. Model A (Groq) — guardrail analysis
-      4. Model B (OpenRouter) — independent verification
+      4. Model B (Groq / VERIFIER_MODEL) — independent verification
       5. apply_corrections — merge verified analysis
       6. Python scoring — deterministic final score + verdict
       7. Groq explanation — prose only, never overrides score
@@ -1959,7 +1971,7 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
 
     # ── Stage 4: Model B — Independent Verification ──
     if progress_callback:
-        progress_callback(4, "Model B — Verification", "OpenRouter independent verifier checking Model A...")
+        progress_callback(4, "Model B — Verification", "Independent verifier cross-auditing Model A...")
     verification = verify_analysis(reviews, sentiment, guardrail)
 
     # Handle REQUIRE_VERIFICATION
@@ -2018,19 +2030,11 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
         "reviews":        reviews,
         "sentiment":      verified_sentiment,
         "guardrail":      verified_guardrail,
+        # verification is already normalised by _normalise_verification /
+        # _unavailable_verification — do NOT re-default any of it to PASS here.
         "verification":   {
             **verification,
-            "status":               verification.get("verification_status", "PASS"),
-            "accuracy":             verification.get("accuracy", 0.94),
-            "hallucination_detected": verification.get("hallucination_detected", False),
-            "corrections_count":    n_corrections,
-            "corrections":          verification.get("corrections", []),
-            "verification_notes":   verification.get("verification_notes", ""),
-            "sentiment":            verification.get("sentiment", {"status": "PASS", "observations": [], "issues": []}),
-            "aspects":              verification.get("aspects", {"status": "PASS", "observations": [], "issues": []}),
-            "keywords":             verification.get("keywords", {"status": "PASS", "observations": [], "issues": []}),
-            "guardrail":            verification.get("guardrail", {"status": "PASS", "observations": [], "issues": []}),
-            "evidence":             verification.get("evidence", {"status": "PASS", "observations": [], "unsupported_claims": [], "issues": []}),
+            "corrections_count":         n_corrections,
             "missing_positive_evidence": verification.get("missing_positive_evidence", []),
             "missing_negative_evidence": verification.get("missing_negative_evidence", []),
         },
@@ -2047,7 +2051,7 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
                 "role": "Independent Verifier (Model B)",
                 "provider": "Groq",
                 "model": VERIFIER_MODEL,
-                "status": verification.get("verification_status", "PASS"),
+                "status": verification.get("verification_status", "UNKNOWN"),
             },
             "model_3": {
                 "role": "Executive Verdict (Model C)",
@@ -2055,7 +2059,7 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
                 "model": VERDICT_MODEL,
             },
             "model_a": {"provider": "Groq", "model": STRONG_MODEL, "fast_model": FAST_MODEL},
-            "model_b": {"provider": "Groq", "model": VERIFIER_MODEL, "status": verification.get("verification_status", "PASS")},
+            "model_b": {"provider": "Groq", "model": VERIFIER_MODEL, "status": verification.get("verification_status", "UNKNOWN")},
             "verdict_model": {"provider": "Groq", "model": VERDICT_MODEL},
         },
     }

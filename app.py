@@ -1,5 +1,6 @@
 import streamlit as st
 import os, json, time, re
+from html import escape as _html_escape
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -8,6 +9,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import location as loc_engine
+
+
+def esc(value) -> str:
+    """
+    Escape anything before it is interpolated into an `unsafe_allow_html` block.
+
+    Review text, place names and LLM output are all untrusted here: a review
+    containing `<img src=x onerror=...>` would otherwise execute in the session.
+    """
+    if value is None:
+        return ""
+    return _html_escape(str(value), quote=True)
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -319,27 +332,55 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
     v_corr     = verification.get("corrections_count", 0)
     v_notes    = verification.get("verification_notes", "")
 
+    v_coverage = verification.get("coverage")
+    v_unchecked = verification.get("fields_unchecked", [])
+
     V_STYLE = {
         "PASS":        ("#064e3b", "#10b981", "✅"),
         "CORRECTED":   ("#422006", "#f59e0b", "🔧"),
         "FAIL":        ("#450a0a", "#ef4444", "❌"),
-        "UNAVAILABLE": ("#1e1b4b", "#6366f1", "⚠️"),
+        "UNAVAILABLE": ("#450a0a", "#f87171", "🚫"),
+        "UNKNOWN":     ("#1e1b4b", "#6366f1", "❔"),
     }
     v_bg, v_border, v_icon = V_STYLE.get(v_status, ("#1e293b", "#64748b", "ℹ️"))
-    v_acc_str  = f"{v_accuracy:.0%}" if v_accuracy is not None else "N/A"
-    v_hall_str = ("Yes 🚨" if v_hall else "No ✅") if v_hall is not None else "N/A"
+
+    # "Not reported" is deliberate: an unverified run must never render as 0% or
+    # as a plausible-looking default accuracy.
+    v_acc_str  = f"{v_accuracy:.0%}" if isinstance(v_accuracy, (int, float)) else "not reported"
+    v_hall_str = "unknown" if v_hall is None else ("Yes 🚨" if v_hall else "No ✅")
+    v_cov_str  = (
+        f"{len(verification.get('fields_checked', []))}/5 fields"
+        if isinstance(v_coverage, (int, float)) else "—"
+    )
+
+    if v_status in ("UNAVAILABLE", "UNKNOWN"):
+        headline = "Model 2 did NOT verify this analysis"
+    else:
+        headline = f"Model 2: {v_status}"
 
     st.markdown(
         f'<div style="background:{v_bg};border:1px solid {v_border};border-radius:8px;'
         f'padding:0.7rem 1.2rem;margin:0.5rem 0 1rem 0;display:flex;flex-wrap:wrap;gap:1.5rem;align-items:center;">'
-        f'<span style="color:{v_border};font-weight:700;font-size:0.95rem;">{v_icon} Model B: {v_status}</span>'
-        f'<span style="color:#94a3b8;font-size:0.82rem;">Accuracy <b style="color:#e2e8f0;">{v_acc_str}</b></span>'
-        f'<span style="color:#94a3b8;font-size:0.82rem;">Hallucination <b style="color:#e2e8f0;">{v_hall_str}</b></span>'
+        f'<span style="color:{v_border};font-weight:700;font-size:0.95rem;">{v_icon} {esc(headline)}</span>'
+        f'<span style="color:#94a3b8;font-size:0.82rem;">Audited <b style="color:#e2e8f0;">{esc(v_cov_str)}</b></span>'
+        f'<span style="color:#94a3b8;font-size:0.82rem;">Self-reported accuracy <b style="color:#e2e8f0;">{esc(v_acc_str)}</b></span>'
+        f'<span style="color:#94a3b8;font-size:0.82rem;">Hallucination <b style="color:#e2e8f0;">{esc(v_hall_str)}</b></span>'
         f'<span style="color:#94a3b8;font-size:0.82rem;">Corrections applied <b style="color:#e2e8f0;">{v_corr}</b></span>'
-        + (f'<span style="color:#64748b;font-size:0.78rem;font-style:italic;">{v_notes}</span>' if v_notes else "")
+        + (f'<span style="color:#cbd5e1;font-size:0.78rem;font-style:italic;">{esc(v_notes)}</span>' if v_notes else "")
         + '</div>',
         unsafe_allow_html=True,
     )
+    if v_status in ("UNAVAILABLE", "UNKNOWN"):
+        st.caption(
+            "⚠️ The verdict below comes from Model 1 + deterministic scoring only. "
+            "Treat it as unaudited."
+        )
+    elif v_unchecked:
+        st.caption(
+            "⚠️ Model 2 returned no usable judgement for: "
+            + ", ".join(v_unchecked)
+            + " — those sections are shown as UNCHECKED."
+        )
 
     # ── Verdict banner ────────────────────────────────────────────────────────
     rec_label = rec.get("recommendation", "RECOMMENDED").upper()
@@ -819,24 +860,32 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
             st.subheader("✅ Verified Genuine Positives")
             for p in guardrail.get("genuine_positives", []):
                 if not isinstance(p, dict): continue
-                ids = p.get("supporting_review_ids",[])
+                ids  = p.get("supporting_review_ids", [])
+                conf = p.get("confidence")
+                # confidence may legitimately be None (derived, not graded) —
+                # show that rather than rendering an invented 0%.
+                conf_str = f"conf {conf:.0%}" if isinstance(conf, (int, float)) else "confidence not assessed"
+                tag = ' <span style="font-size:0.72rem;opacity:0.6;">[derived from Model 1]</span>' if p.get("derived") else ""
                 st.markdown(
-                    f'<div class="pro-card"><b>{p.get("aspect","—")}</b>'
-                    f' <span style="opacity:0.7;font-size:0.8rem;">conf {p.get("confidence",0):.0%}'
-                    + (f' · {ids}' if ids else "") + f'</span><br>{p.get("evidence","")}</div>',
+                    f'<div class="pro-card"><b>{esc(p.get("aspect","—"))}</b>{tag}'
+                    f' <span style="opacity:0.7;font-size:0.8rem;">{esc(conf_str)}'
+                    + (f' · {esc(", ".join(str(i) for i in ids))}' if ids else "")
+                    + f'</span><br>{esc(p.get("evidence",""))}</div>',
                     unsafe_allow_html=True,
                 )
         with vc_col:
             st.subheader("⚠️ Verified Genuine Concerns")
             for c in guardrail.get("genuine_concerns", []):
                 if not isinstance(c, dict): continue
-                sev   = c.get("severity","Minor")
+                sev   = c.get("severity") or "Severity not assessed"
                 s_col = {"Major":"#ef4444","Moderate":"#f59e0b","Minor":"#94a3b8"}.get(sev,"#94a3b8")
-                ids   = c.get("supporting_review_ids",[])
+                ids   = c.get("supporting_review_ids", [])
+                tag   = ' <span style="font-size:0.72rem;opacity:0.6;">[derived from Model 1]</span>' if c.get("derived") else ""
                 st.markdown(
-                    f'<div class="con-card"><b>{c.get("aspect","—")}</b>'
-                    f' <span style="color:{s_col};font-size:0.8rem;font-weight:700;">[{sev}]'
-                    + (f' · {ids}' if ids else "") + f'</span><br>{c.get("evidence","")}</div>',
+                    f'<div class="con-card"><b>{esc(c.get("aspect","—"))}</b>{tag}'
+                    f' <span style="color:{s_col};font-size:0.8rem;font-weight:700;">[{esc(sev)}]'
+                    + (f' · {esc(", ".join(str(i) for i in ids))}' if ids else "")
+                    + f'</span><br>{esc(c.get("evidence",""))}</div>',
                     unsafe_allow_html=True,
                 )
 
@@ -885,26 +934,49 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
     # TAB 5 — Model 2 (Verifier) Verification & Audit
     # ══════════════════════════════════════════════════════
     with tab_verif:
-        vf_status = verification.get("status", "PASS")
+        vf_status = verification.get("status", "UNKNOWN")
 
-        if vf_status == "UNAVAILABLE":
-            st.warning(
-                f"⚠️ Independent verification was not available for this analysis.\n\n"
-                f"{verification.get('verification_notes','Set GROQ_API_KEY in .env to enable Model 2.')}"
+        if vf_status in ("UNAVAILABLE", "UNKNOWN"):
+            st.error(
+                "🚫 **Model 2 did not verify this analysis.**\n\n"
+                + esc(verification.get("verification_notes", ""))
+                + "\n\nNothing below was independently cross-checked. The verdict rests on "
+                  "Model 1 plus the deterministic scoring engine alone, and the confidence "
+                  "figure has been reduced to reflect that."
             )
+            if verification.get("reason"):
+                with st.expander("Why did verification fail?"):
+                    st.code(str(verification["reason"]), language="text")
         else:
+            checked   = verification.get("fields_checked", [])
+            unchecked = verification.get("fields_unchecked", [])
+
             vc1, vc2, vc3, vc4 = st.columns(4)
-            v_acc = verification.get("accuracy", 0.94)
-            with vc1: st.metric("Verification Accuracy", f"{v_acc:.0%}" if v_acc is not None else "94%")
+            v_acc = verification.get("accuracy")
+            with vc1:
+                st.metric(
+                    "Self-reported Accuracy",
+                    f"{v_acc:.0%}" if isinstance(v_acc, (int, float)) else "not reported",
+                    help="Model 2's own estimate. It is not measured against ground truth.",
+                )
             with vc2: st.metric("Audit Status", vf_status)
             with vc3:
-                hall = verification.get("hallucination_detected", False)
-                st.metric("Hallucination Flag", ("Yes 🚨" if hall else "No ✅"))
+                hall = verification.get("hallucination_detected")
+                st.metric("Hallucination Flag", "unknown" if hall is None else ("Yes 🚨" if hall else "No ✅"))
             with vc4: st.metric("Corrections Applied", verification.get("corrections_count", 0))
 
+            st.progress(
+                len(checked) / 5,
+                text=f"Fields Model 2 actually reported on: {len(checked)}/5",
+            )
+
             st.divider()
-            st.subheader("📋 Field-by-Field Cross-Verification (Extracted from Reviews)")
-            st.caption("Model 2 cross-audits Model 1's claims against raw Google Maps review excerpts to confirm ground-truth accuracy.")
+            st.subheader("📋 Field-by-Field Cross-Verification")
+            st.caption(
+                "Model 2 is asked to cross-audit Model 1's claims against raw review excerpts. "
+                "Fields it returned nothing usable for are shown as UNCHECKED — they are not "
+                "backfilled with generated text."
+            )
 
             field_checks = [
                 ("Sentiment", verification.get("sentiment", {})),
@@ -915,39 +987,48 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
             ]
             for field_name, fdata in field_checks:
                 if not isinstance(fdata, dict):
-                    fdata = {"status": "PASS", "observations": [], "issues": []}
-                fstatus = fdata.get("status", "PASS")
-                observations = fdata.get("observations", [])
-                issues = fdata.get("issues", []) or fdata.get("unsupported_claims", [])
-                badge = {"PASS": "✅", "CORRECTED": "🔧", "FAIL": "❌"}.get(fstatus, "✅")
-                
-                with st.expander(
-                    f"{badge} **{field_name}** — {fstatus}"
-                    + (f" ({len(issues)} issue{'s' if len(issues)!=1 else ''})" if issues else " (Verified Ground Truth)"),
-                    expanded=True,
-                ):
+                    fdata = {}
+                fstatus      = fdata.get("status", "UNCHECKED")
+                observations = fdata.get("observations", []) or []
+                issues       = (fdata.get("issues", []) or []) or (fdata.get("unsupported_claims", []) or [])
+                badge = {"PASS": "✅", "CORRECTED": "🔧", "FAIL": "❌", "UNCHECKED": "⬜"}.get(fstatus, "❔")
+
+                if issues:
+                    tail = f" ({len(issues)} issue{'s' if len(issues) != 1 else ''})"
+                elif fstatus == "UNCHECKED":
+                    tail = " (no verifier output)"
+                else:
+                    tail = f" ({len(observations)} observation{'s' if len(observations) != 1 else ''})"
+
+                with st.expander(f"{badge} **{field_name}** — {fstatus}{tail}", expanded=True):
+                    if fstatus == "UNCHECKED":
+                        st.info(
+                            "Model 2 returned no usable judgement for this field. "
+                            "Nothing is claimed about it either way."
+                        )
+
                     if observations:
-                        st.markdown("**🔎 Extracted Review Observations:**")
+                        st.markdown("**🔎 Verifier observations:**")
                         for obs in observations:
                             st.markdown(
                                 f'<div class="pro-card" style="margin-bottom:0.4rem;background:#052e1635;border-left:3px solid #10b981;">'
-                                f'<b>Observation:</b> {obs}'
+                                f'{esc(obs)}'
                                 f'</div>',
                                 unsafe_allow_html=True,
                             )
 
                     if issues:
-                        st.markdown("**⚠️ Flagged Discrepancies / Issues:**")
+                        st.markdown("**⚠️ Flagged discrepancies / issues:**")
                         for issue in issues:
                             st.markdown(
                                 f'<div class="con-card" style="margin-bottom:0.4rem;background:#450a0a35;border-left:3px solid #ef4444;">'
-                                f'⚠️ {issue}'
+                                f'⚠️ {esc(issue)}'
                                 f'</div>',
                                 unsafe_allow_html=True,
                             )
 
-                    if not observations and not issues:
-                        st.success("✅ Model 2 independently audited this field against review text with 0 discrepancies.")
+                    if fstatus != "UNCHECKED" and not observations and not issues:
+                        st.success(f"Model 2 reported {fstatus} for this field with no further detail.")
 
             # Corrections detail
             corrections = verification.get("corrections", [])
@@ -972,7 +1053,7 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
                         else:
                             st.warning("No review IDs provided — correction was skipped.")
             else:
-                st.success("✅ No corrections necessary — Model A analysis verified clean.")
+                st.success("Model 2 proposed no corrections to Model 1 output.")
 
             # Missing evidence
             miss_pos = verification.get("missing_positive_evidence", [])
