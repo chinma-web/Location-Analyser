@@ -144,12 +144,14 @@ So `r17` means three different reviews depending on which stage produced it, and
 
 ## 8. Prioritised roadmap
 
-### P0 — Integrity (makes the product honest)
-1. Remove all fabricated verification/guardrail content; make `UNAVAILABLE` a real, visible state.
-2. Stable review IDs across all stages + evidence-ID validation.
-3. Move config validation out of import time.
-4. Escape all user/LLM content rendered as HTML.
-5. Fix cache keying (hash-based, in `cache/`, gitignored, with force-refresh).
+### P0 — Integrity (makes the product honest) — ✅ **DONE**
+1. ✅ Remove all fabricated verification/guardrail content; make `UNAVAILABLE` a real, visible state. — `1b4a3ae`
+2. ✅ Stable review IDs across all stages + evidence-ID validation. — `4fd338f`
+3. ✅ Move config validation out of import time. — `af6f795`
+4. ✅ Escape all user/LLM content rendered as HTML. — `db48336`
+5. ✅ Fix cache keying (hash-based, in `cache/`, gitignored, with force-refresh). — `7f00254`
+
+_26 tests now cover these fixes and run without API keys: `pytest tests/`._
 
 ### P1 — Confidence (makes it maintainable)
 6. `pytest` suite for `scoring.py`, `_clean_reviews`, `_heuristic_checks`, `_merge_sentiment_batches`, JSON repair — with recorded fixture payloads so tests need no API keys.
