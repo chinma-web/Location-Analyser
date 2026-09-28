@@ -72,11 +72,12 @@ with st.sidebar:
     st.markdown("## 📍 3-Model Location Analyzer")
     st.divider()
 
-    apify_key = os.getenv("APIFY_API_TOKEN") or os.getenv("APify_API_TOKEN")
-    groq_key  = os.getenv("GROQ_API_KEY")
+    missing_keys = loc_engine.validate_config(raise_on_error=False)
+    apify_key = "APIFY_API_TOKEN" not in missing_keys
+    groq_key  = "GROQ_API_KEY"    not in missing_keys
 
-    if not apify_key or not groq_key:
-        st.warning("⚠️ Missing API keys in `.env`")
+    if missing_keys:
+        st.warning("⚠️ Missing in `.env`: " + ", ".join(f"`{k}`" for k in missing_keys))
 
     st.markdown("**🧠 Model 1 — Primary Analyst**")
     st.caption(f"Groq / {os.getenv('STRONG_MODEL','llama-3.3-70b-versatile')} + {os.getenv('FAST_MODEL','llama-3.1-8b-instant')}")
@@ -86,8 +87,6 @@ with st.sidebar:
     st.markdown("**⚖️ Model 3 — Executive Verdict**")
     verdict_model = os.getenv("VERDICT_MODEL", "llama-3.3-70b-versatile")
     st.caption(f"Groq / {verdict_model} (Final Verdict)")
-    if not groq_key:
-        st.warning("⚠️ GROQ_API_KEY not set")
     st.divider()
 
     max_reviews = st.slider(

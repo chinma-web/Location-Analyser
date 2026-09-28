@@ -60,13 +60,60 @@ SENTIMENT_BATCH_SIZE = 15
 
 console = Console()
 
-if not APIFY_TOKEN or not GROQ_KEY:
-    console.print("[red bold]ERROR:[/red bold] Missing API keys.")
-    console.print("Create a .env file with APIFY_API_TOKEN and GROQ_API_KEY")
-    sys.exit(1)
 
-apify = ApifyClient(APIFY_TOKEN)
-groq  = Groq(api_key=GROQ_KEY)
+# ── Configuration validation & lazy clients ───────────────────────────────────
+# NOTE: never validate or exit at import time — `app.py` imports this module and
+# a bare sys.exit() would terminate the Streamlit script run before the UI can
+# render a helpful message. Callers decide what to do with a bad config.
+
+class ConfigError(RuntimeError):
+    """Raised when required API credentials are missing."""
+
+
+def missing_credentials() -> list:
+    """Return the names of required env vars that are not set."""
+    missing = []
+    if not APIFY_TOKEN:
+        missing.append("APIFY_API_TOKEN")
+    if not GROQ_KEY:
+        missing.append("GROQ_API_KEY")
+    return missing
+
+
+def validate_config(raise_on_error: bool = True) -> list:
+    """Check required credentials. Returns the list of missing var names."""
+    missing = missing_credentials()
+    if missing and raise_on_error:
+        raise ConfigError(
+            "Missing required environment variable(s): "
+            + ", ".join(missing)
+            + ". Copy .env.example to .env and fill in your keys."
+        )
+    return missing
+
+
+_apify_client = None
+_groq_client  = None
+
+
+def get_apify() -> "ApifyClient":
+    """Lazily build the Apify client so importing this module has no side effects."""
+    global _apify_client
+    if _apify_client is None:
+        if not APIFY_TOKEN:
+            raise ConfigError("APIFY_API_TOKEN is not set.")
+        _apify_client = ApifyClient(APIFY_TOKEN)
+    return _apify_client
+
+
+def get_groq() -> "Groq":
+    """Lazily build the Groq client so importing this module has no side effects."""
+    global _groq_client
+    if _groq_client is None:
+        if not GROQ_KEY:
+            raise ConfigError("GROQ_API_KEY is not set.")
+        _groq_client = Groq(api_key=GROQ_KEY)
+    return _groq_client
 
 
 # ── Shared Groq helper ────────────────────────────────────────────────────────
@@ -75,7 +122,7 @@ def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> d
     """Call Groq and parse the JSON response. Retries once on parse failure."""
     for attempt in range(2):
         try:
-            res = groq.chat.completions.create(
+            res = get_groq().chat.completions.create(
                 model=model,
                 messages=[
                     {"role": "system", "content": "Respond ONLY with valid JSON. No markdown, no explanation."},
@@ -135,7 +182,7 @@ def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> d
             if "decommissioned" in err_str or "not found" in err_str:
                 console.print(f"[yellow]⚠ Model `{model}` is deprecated or unavailable on Groq. Falling back to `{STRONG_MODEL}`...[/yellow]")
                 try:
-                    res = groq.chat.completions.create(
+                    res = get_groq().chat.completions.create(
                         model=STRONG_MODEL if model != STRONG_MODEL else FAST_MODEL,
                         messages=[
                             {"role": "system", "content": "Respond ONLY with valid JSON. No markdown, no explanation."},
@@ -175,7 +222,7 @@ def call_verifier(system_prompt: str, user_prompt: str, max_tokens: int = 1500) 
     if not GROQ_KEY:
         raise RuntimeError("GROQ_API_KEY is not set in environment.")
 
-    client = Groq(api_key=GROQ_KEY)
+    client = get_groq()
     
     try:
         response = client.chat.completions.create(
@@ -422,7 +469,7 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
             }
 
     try:
-        run = apify.actor(ACTOR_ID).call(run_input=run_input)
+        run = get_apify().actor(ACTOR_ID).call(run_input=run_input)
         if isinstance(run, dict):
             dataset_id = run.get("defaultDatasetId") or run.get("default_dataset_id")
         else:
@@ -432,7 +479,7 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
         if not dataset_id:
             raise ValueError(f"Could not retrieve dataset ID from run: {run}")
 
-        all_places = list(apify.dataset(dataset_id).iterate_items())
+        all_places = list(get_apify().dataset(dataset_id).iterate_items())
         if not all_places:
             console.print("[red]✗  No places returned by Apify.[/red]")
             return [], {}, _empty_review_stats()
@@ -2022,6 +2069,12 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    _missing = validate_config(raise_on_error=False)
+    if _missing:
+        console.print("[red bold]ERROR:[/red bold] Missing API keys: " + ", ".join(_missing))
+        console.print("Create a .env file (see .env.example) with APIFY_API_TOKEN and GROQ_API_KEY")
+        sys.exit(1)
+
     loc = ""
     n   = 30
 
