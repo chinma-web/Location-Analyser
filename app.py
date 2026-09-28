@@ -482,9 +482,11 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Tabs ──────────────────────────────────────────────────────────────────
-    tab_verdict, tab_sentiment, tab_guardrail, tab_tips, tab_verif, tab_raw = st.tabs([
+    (tab_verdict, tab_sentiment, tab_evidence, tab_guardrail,
+     tab_tips, tab_verif, tab_raw) = st.tabs([
         "📋 Executive Verdict (Model 3)",
         "🧠 Deep Sentiment (Model 1)",
+        "🔬 Evidence (no model)",
         "🛡️ Guardrail & Authenticity (Model 1)",
         "💡 Visitor Guide (Model 3)",
         "🔍 Model 2 Verification & Audit",
@@ -771,18 +773,120 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
                     unsafe_allow_html=True,
                 )
 
-        # Keywords
+        # Keywords — annotated with how many reviews actually contain them
+        grounding = sentiment.get("grounding", {})
+
+        def _kw_pills(keywords, grounded_block, css, icon):
+            counts = {g["term"].lower(): g["review_count"]
+                      for g in (grounded_block or {}).get("grounded", [])}
+            missing = {t.lower() for t in (grounded_block or {}).get("ungrounded", [])}
+            pills = []
+            for kw in keywords:
+                n = counts.get(str(kw).lower())
+                if n:
+                    pills.append(f'<span class="tag-pill {css}">{icon} {esc(kw)} · {n}</span>')
+                elif str(kw).lower() in missing:
+                    pills.append(
+                        f'<span class="tag-pill" style="opacity:.55;border-style:dashed;" '
+                        f'title="Not found verbatim in any review">{icon} {esc(kw)} · 0</span>')
+                else:
+                    pills.append(f'<span class="tag-pill {css}">{icon} {esc(kw)}</span>')
+            return "".join(pills)
+
         kc1, kc2 = st.columns(2)
         with kc1:
             st.subheader("👍 Positive Keywords")
             pos_kws = sentiment.get("positive_keywords", [])
             if pos_kws:
-                st.markdown("".join(f'<span class="tag-pill tag-pos">👍 {esc(kw)}</span>' for kw in pos_kws), unsafe_allow_html=True)
+                st.markdown(_kw_pills(pos_kws, grounding.get("positive_keywords"), "tag-pos", "👍"),
+                            unsafe_allow_html=True)
         with kc2:
             st.subheader("👎 Negative Keywords")
             neg_kws = sentiment.get("negative_keywords", [])
             if neg_kws:
-                st.markdown("".join(f'<span class="tag-pill tag-neg">👎 {esc(kw)}</span>' for kw in neg_kws), unsafe_allow_html=True)
+                st.markdown(_kw_pills(neg_kws, grounding.get("negative_keywords"), "tag-neg", "👎"),
+                            unsafe_allow_html=True)
+        if grounding:
+            st.caption("Number after each keyword = reviews containing it verbatim. "
+                       "Dashed pills were not found in the review text (a paraphrase, "
+                       "or the model made it up). See the Evidence tab.")
+
+    # ══════════════════════════════════════════════════════
+    # TAB 3 — Evidence (extractive, no model involved)
+    # ══════════════════════════════════════════════════════
+    with tab_evidence:
+        grounding = sentiment.get("grounding", {})
+        if not grounding:
+            st.info("No extractive grounding available for this report. "
+                    "Re-run the analysis to generate it.")
+        else:
+            st.markdown("Everything on this tab is **counted directly from the review text**. "
+                        "No model produced these numbers, so they can be checked by hand.")
+
+            pos_block = grounding.get("positive_keywords", {})
+            neg_block = grounding.get("negative_keywords", {})
+            ratios = [r for r in (pos_block.get("grounded_ratio"), neg_block.get("grounded_ratio"))
+                      if r is not None]
+            ec1, ec2, ec3 = st.columns(3)
+            with ec1:
+                st.metric("Keywords found in text",
+                          f"{sum(ratios) / len(ratios):.0%}" if ratios else "—",
+                          help="Share of the model's keywords that appear verbatim in reviews.")
+            with ec2:
+                st.metric("Unsupported keywords",
+                          len(pos_block.get("ungrounded", []) + neg_block.get("ungrounded", [])))
+            with ec3:
+                st.metric("Aspects with no lexical support",
+                          len(grounding.get("aspects_without_lexical_support", [])))
+
+            unsupported = grounding.get("aspects_without_lexical_support", [])
+            if unsupported:
+                st.warning("Scored without any matching words in the reviews: "
+                           + ", ".join(a.replace("_", " ") for a in unsupported)
+                           + ". Treat those scores with scepticism.")
+
+            st.subheader("🔤 Most discussed terms")
+            st.caption("Ranked by how many distinct reviews use the term — one long "
+                       "rant cannot manufacture a theme.")
+            top = grounding.get("top_terms", [])
+            if top:
+                st.dataframe(
+                    pd.DataFrame([{"Term": t["term"], "Reviews": t["review_count"],
+                                   "Total mentions": t["count"]} for t in top]),
+                    use_container_width=True, hide_index=True,
+                )
+            else:
+                st.caption("Not enough overlapping vocabulary to rank terms.")
+
+            st.subheader("🔎 Aspect drill-down")
+            st.caption("Which reviews mention each aspect, and through which words.")
+            by_id = {r.get("id") or f"r{i+1}": r for i, r in enumerate(reviews)}
+            aspects = sentiment.get("aspect_scores", {})
+            for aspect, entry in (grounding.get("aspect_mentions") or {}).items():
+                label = aspect.replace("_", " ").title()
+                model_score = (aspects.get(aspect) or {}).get("score")
+                score_txt = f"{model_score}/10" if isinstance(model_score, (int, float)) else "not scored"
+                header = f"{label} — {entry['review_count']} reviews mention it · model score {score_txt}"
+                with st.expander(header):
+                    if not entry["review_count"]:
+                        st.caption("No review uses any word associated with this aspect.")
+                        continue
+                    terms = entry.get("terms", {})
+                    if terms:
+                        st.markdown("".join(
+                            f'<span class="tag-pill">{esc(t)} · {n}</span>'
+                            for t, n in list(terms.items())[:12]), unsafe_allow_html=True)
+                    for rid in entry["review_ids"][:8]:
+                        review = by_id.get(rid, {})
+                        stars = "⭐" * int(review.get("rating") or 0)
+                        st.markdown(
+                            f'<div style="border-left:3px solid #334155;padding:4px 10px;margin:6px 0;">'
+                            f'<b style="color:#38bdf8;">{esc(rid)}</b> {esc(stars)}<br>'
+                            f'<span style="color:#cbd5e1;font-size:0.88rem;">'
+                            f'{esc((review.get("text") or "")[:400])}</span></div>',
+                            unsafe_allow_html=True)
+                    if len(entry["review_ids"]) > 8:
+                        st.caption(f"+ {len(entry['review_ids']) - 8} more reviews mention this aspect.")
 
     # ══════════════════════════════════════════════════════
     # TAB 3 — Guardrail & Authenticity

@@ -16,6 +16,7 @@ from locan.config import (
     VERIFIER_MODEL,
 )
 from locan.corrections import apply_corrections
+from locan.grounding import ground_sentiment
 from locan.guardrail import guardrail_analysis
 from locan.logging_utils import log
 from locan.report import Panel, console, display_report
@@ -94,6 +95,7 @@ def generate_recommendation(
         "sentiment_score":   sentiment.get("sentiment_score"),
         "top_positive_kw":   sentiment.get("positive_keywords", [])[:6],
         "top_negative_kw":   sentiment.get("negative_keywords", [])[:4],
+        "grounding":         sentiment.get("grounding", {}),
         "positive_points":   sentiment.get("positive_points", [])[:5],
         "negative_points":   sentiment.get("negative_points", [])[:5],
         "themes":            [
@@ -170,6 +172,28 @@ Return EXACTLY this JSON (use the provided verdict and visit_score as-is):
 
 # ── Main Pipeline ──────────────────────────────────────────────────────────────
 
+
+def _log_grounding(sentiment: dict) -> None:
+    """Report how much of the model's keyword output is backed by review text."""
+    grounding = (sentiment or {}).get("grounding") or {}
+    if not grounding:
+        return
+    positive = grounding.get("positive_keywords", {})
+    negative = grounding.get("negative_keywords", {})
+    ungrounded = positive.get("ungrounded", []) + negative.get("ungrounded", [])
+    ratios = [r for r in (positive.get("grounded_ratio"), negative.get("grounded_ratio"))
+              if r is not None]
+    if ratios:
+        pct = sum(ratios) / len(ratios) * 100
+        tag = "green" if pct >= 70 else "yellow"
+        log(f"[{tag}]   ✓ Keyword grounding: {pct:.0f}% of keywords appear verbatim in reviews[/{tag}]")
+    if ungrounded:
+        log(f"[dim]     Not found in text (paraphrase or invention): {', '.join(ungrounded[:6])}[/dim]")
+    unsupported = grounding.get("aspects_without_lexical_support") or []
+    if unsupported:
+        log(f"[yellow]   ⚠ Aspects scored with no lexical support: {', '.join(unsupported)}[/yellow]")
+
+
 def analyze(location: str, max_reviews: int = 30, progress_callback=None,
             force_refresh: bool = False, render_report: bool = False) -> dict:
     """
@@ -224,7 +248,11 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
     if progress_callback:
         progress_callback(2, "Model A — Sentiment", f"Analyzing {len(reviews)} reviews in batches...")
     sentiment = analyze_sentiment(reviews)
-    time.sleep(1)
+
+    # Extractive grounding: count what reviewers literally wrote, so the UI can
+    # separate keywords that appear in the text from ones the model invented.
+    sentiment = ground_sentiment(sentiment, reviews)
+    _log_grounding(sentiment)
 
     # ── Stage 3: Model A — Guardrail ──
     if progress_callback:
