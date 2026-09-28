@@ -400,6 +400,56 @@ def expand_maps_url(url: str) -> str:
         return url
 
 
+# ── Stable review identity ────────────────────────────────────────────────────
+# Every stage must cite the SAME review when it says "r7". Previously the
+# sentiment stage numbered reviews by global batch offset, the guardrail stage
+# re-numbered reviews[:18] as r1..r18 and the verifier re-numbered reviews[:20],
+# so an evidence ID meant three different things depending on who emitted it.
+
+def assign_review_ids(reviews: list) -> list:
+    """Stamp a stable `id` on each review. Call once, right after cleaning."""
+    for i, r in enumerate(reviews):
+        r["id"] = f"r{i + 1}"
+    return reviews
+
+
+def known_review_ids(reviews: list) -> set:
+    return {r["id"] for r in reviews if isinstance(r, dict) and r.get("id")}
+
+
+def _drop_unknown_ids(node, known: set, dropped: list):
+    """Recursively strip evidence IDs that don't refer to a real review."""
+    if isinstance(node, dict):
+        for key, val in node.items():
+            if key.endswith("review_ids") and isinstance(val, list):
+                kept = [i for i in val if i in known]
+                dropped.extend([i for i in val if i not in known])
+                node[key] = kept
+            else:
+                _drop_unknown_ids(val, known, dropped)
+    elif isinstance(node, list):
+        for item in node:
+            _drop_unknown_ids(item, known, dropped)
+    return node
+
+
+def validate_evidence_ids(payload: dict, reviews: list, stage: str) -> dict:
+    """
+    Remove hallucinated citations (e.g. "r42" when only 20 reviews exist).
+    An unsupported claim keeps its text but loses its fake evidence, so the UI
+    can no longer imply a citation that does not exist.
+    """
+    known, dropped = known_review_ids(reviews), []
+    _drop_unknown_ids(payload, known, dropped)
+    if dropped:
+        uniq = sorted(set(dropped))
+        console.print(
+            f"[yellow]\u26a0  {stage}: dropped {len(dropped)} citation(s) to "
+            f"non-existent reviews ({', '.join(uniq[:8])}{'…' if len(uniq) > 8 else ''})[/yellow]"
+        )
+    return payload
+
+
 # ── MODULE 1: Apify Scraper ───────────────────────────────────────────────────
 
 def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
@@ -525,7 +575,7 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
         usable_text_review_count = len(usable)
 
         # ── Clean: remove near-duplicates (>70% Jaccard) and obvious spam ──
-        cleaned = _clean_reviews(usable)
+        cleaned = assign_review_ids(_clean_reviews(usable))
         cleaned_review_count = len(cleaned)
 
         review_stats = {
@@ -582,7 +632,8 @@ def _clean_reviews(reviews: list) -> list:
 def _sentiment_prompt_for_batch(batch: list, batch_offset: int) -> str:
     """Build the sentiment analysis prompt for one batch of reviews."""
     reviews_block = "\n---\n".join(
-        f"[r{batch_offset + i + 1}] ⭐{r['rating']}/5  date:{str(r.get('date',''))[:10]}\n{r['text'][:350]}"
+        f"[{r.get('id') or f'r{batch_offset + i + 1}'}] ⭐{r['rating']}/5  "
+        f"date:{str(r.get('date',''))[:10]}\n{r['text'][:350]}"
         for i, r in enumerate(batch)
     )
     return f"""You are an expert review analyst. Perform DEEP multi-dimensional sentiment analysis
@@ -828,7 +879,7 @@ def analyze_sentiment(reviews: list) -> dict:
         if b_idx < len(batches) - 1:
             time.sleep(1.2)   # respect Groq rate limits
 
-    merged = _merge_sentiment_batches(batch_results)
+    merged = validate_evidence_ids(_merge_sentiment_batches(batch_results), reviews, "Model A sentiment")
 
     # ── Always compute rating distribution from raw data ──
     counts = {"5": 0, "4": 0, "3": 0, "2": 0, "1": 0}
@@ -947,11 +998,11 @@ def guardrail_analysis(reviews: list, sentiment: dict) -> dict:
     # Cap each review text at 120 chars to stay comfortably under 6K TPM limit
     review_sample = [
         {
-            "id":     f"r{i+1}",
+            "id":     r.get("id") or f"r{i+1}",   # stable ID, never re-numbered
             "rating": r["rating"],
-            "text":   r["text"][:120],  # Reduced to 120 chars for reliable TPM fit
+            "text":   r["text"][:120],            # 120 chars keeps us under the 6K TPM limit
         }
-        for i, r in enumerate(reviews[:18])  # Cap at 18 reviews to fit budget
+        for i, r in enumerate(reviews[:18])       # cap at 18 reviews to fit budget
     ]
 
     sentiment_context = {
@@ -966,7 +1017,7 @@ def guardrail_analysis(reviews: list, sentiment: dict) -> dict:
     prompt = f"""Review integrity analysis. Sentiment context: {json.dumps(sentiment_context)}
 Heuristic flags: {json.dumps(heuristic_flags)}
 Stats: {json.dumps(heuristic_stats)}
-Reviews (up to 20): {json.dumps(review_sample)}
+Reviews (a sample; cite ONLY the "id" values shown here, they are not necessarily contiguous): {json.dumps(review_sample)}
 
 Return ONLY this JSON:
 {{
@@ -1036,6 +1087,7 @@ Return ONLY this JSON:
 
     # Guardrail is structured JSON — 8B model is sufficient and saves 70B daily quota
     result = call_groq(prompt, model=FAST_MODEL, max_tokens=4096)
+    result = validate_evidence_ids(result, reviews, "Model A guardrail")
     result = _derive_guardrail_fallbacks(result, reviews, sentiment)
 
     ai_flags  = result.get("suspicious_patterns", [])
@@ -1210,7 +1262,7 @@ def verify_analysis(reviews: list, model_a_sentiment: dict, model_a_guardrail: d
     review_sample = reviews[:20]
     review_list = [
         {
-            "id":     f"r{i+1}",
+            "id":     r.get("id") or f"r{i+1}",   # stable ID, never re-numbered
             "rating": r["rating"],
             "text":   r["text"][:150],
         }
@@ -1294,6 +1346,7 @@ RULES: Only correct claims unsupported by review text. Every correction needs ev
 
     try:
         result = _normalise_verification(call_verifier(VERIFIER_SYSTEM_PROMPT, user_prompt, max_tokens=1500))
+        result = validate_evidence_ids(result, reviews, "Model B verification")
         _log_verification(result)
         return result
     except RuntimeError as e:
@@ -1306,6 +1359,7 @@ RULES: Only correct claims unsupported by review text. Every correction needs ev
                 result = _normalise_verification(
                     call_verifier(VERIFIER_SYSTEM_PROMPT, retry_prompt, max_tokens=1500)
                 )
+                result = validate_evidence_ids(result, reviews, "Model B verification")
                 _log_verification(result, note="10-review retry")
                 return result
             except RuntimeError as e2:
