@@ -65,6 +65,10 @@ REQUIRE_VERIFICATION = os.getenv("REQUIRE_VERIFICATION", "false").lower() == "tr
 # Batch size when reviews exceed this count — avoids token overflows
 SENTIMENT_BATCH_SIZE = 15
 
+# If per-batch sentiment scores differ by more than this, reviewers are split
+# and the merged label is "Mixed" regardless of what the mean works out to.
+POLARISED_BATCH_SPREAD = 0.6
+
 console = Console()
 
 
@@ -913,9 +917,15 @@ def _merge_sentiment_batches(batch_results: list) -> dict:
     # Overall sentiment score
     merged["sentiment_score"] = round(sum(all_scores) / len(all_scores), 3) if all_scores else 0.0
 
-    # Overall sentiment label from score
+    # Overall sentiment label.
+    # Averaging alone is misleading: batches of +0.9 and -0.6 average to +0.15
+    # and would be labelled "Neutral", when the truth is that reviewers are
+    # sharply split. Spread across batches therefore overrides the mean.
     s = merged["sentiment_score"]
-    if s >= 0.4:
+    spread = (max(all_scores) - min(all_scores)) if len(all_scores) > 1 else 0.0
+    if spread > POLARISED_BATCH_SPREAD:
+        merged["overall_sentiment"] = "Mixed"
+    elif s >= 0.4:
         merged["overall_sentiment"] = "Positive"
     elif s <= -0.3:
         merged["overall_sentiment"] = "Negative"
@@ -923,6 +933,7 @@ def _merge_sentiment_batches(batch_results: list) -> dict:
         merged["overall_sentiment"] = "Neutral"
     else:
         merged["overall_sentiment"] = "Mixed"
+    merged["batch_score_spread"] = round(spread, 3)
 
     if trend_latest:
         merged["temporal_trend"] = trend_latest
