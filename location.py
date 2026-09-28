@@ -18,9 +18,11 @@ import time
 import urllib.parse
 import urllib.request
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 
 from dotenv import load_dotenv
 
+from ratelimit import limiter_for
 from scoring import (  # deterministic scoring engine
     DEFAULT_CONFIG as DEFAULT_SCORING_CONFIG,
 )
@@ -73,6 +75,13 @@ REQUIRE_VERIFICATION = os.getenv("REQUIRE_VERIFICATION", "false").lower() == "tr
 
 # Batch size when reviews exceed this count — avoids token overflows
 SENTIMENT_BATCH_SIZE = 15
+
+# Sentiment batches are independent and safe to run concurrently; the shared
+# token bucket keeps the whole pool inside Groq's per-model quota.
+SENTIMENT_MAX_WORKERS = int(os.getenv("SENTIMENT_MAX_WORKERS", "3"))
+
+# Fallback wait (seconds) when Groq rate-limits us without a Retry-After hint.
+RATE_LIMIT_BACKOFF = float(os.getenv("RATE_LIMIT_BACKOFF", "5"))
 
 # If per-batch sentiment scores differ by more than this, reviewers are split
 # and the merged label is "Mixed" regardless of what the mean works out to.
@@ -284,10 +293,24 @@ def write_cache(location: str, max_reviews: int, payload: dict) -> str:
 
 # ── Shared Groq helper ────────────────────────────────────────────────────────
 
+
+def _retry_after_seconds(message: str):
+    """Pull a 'try again in 1.5s' / 'retry after 12' hint out of a Groq error."""
+    match = re.search(r"(?:try again in|retry after)\s*([0-9.]+)\s*(ms|s|seconds?)?", message, re.I)
+    if not match:
+        return None
+    value = float(match.group(1))
+    if (match.group(2) or "").lower() == "ms":
+        value /= 1000.0
+    return min(value, 60.0)   # never sleep longer than a minute on one hint
+
+
 def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> dict:
     """Call Groq and parse the JSON response. Retries once on parse failure."""
+    limiter = limiter_for(model)
     for attempt in range(2):
         try:
+            limiter.acquire(prompt, max_tokens)
             res = get_groq().chat.completions.create(
                 model=model,
                 messages=[
@@ -368,6 +391,14 @@ def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> d
                     return json.loads(raw)
                 except Exception as fb_err:
                     log(f"[red]Fallback model call failed: {fb_err}[/red]")
+            elif "429" in err_str or "rate limit" in err_str or "too many requests" in err_str:
+                # Respect Retry-After when the API supplies it, otherwise back off.
+                retry_after = _retry_after_seconds(str(e)) or (RATE_LIMIT_BACKOFF * (attempt + 1))
+                log(f"[yellow]⚠ Rate limited by Groq — waiting {retry_after:.1f}s[/yellow]")
+                time.sleep(retry_after)
+                if attempt == 0:
+                    continue
+                return {}
             else:
                 log(f"[red]Groq error: {e}[/red]")
             if attempt == 0:
@@ -390,6 +421,7 @@ def call_verifier(system_prompt: str, user_prompt: str, max_tokens: int = 1500) 
 
     client = get_groq()
     
+    limiter_for(VERIFIER_MODEL).acquire(system_prompt + user_prompt, max_tokens)
     try:
         response = client.chat.completions.create(
             model=VERIFIER_MODEL,
@@ -1119,21 +1151,33 @@ def analyze_sentiment(reviews: list) -> dict:
         return {}
 
     # ── Split into batches ──
-    batches      = [reviews[i:i+SENTIMENT_BATCH_SIZE]
-                    for i in range(0, len(reviews), SENTIMENT_BATCH_SIZE)]
-    batch_results = []
+    batches = [reviews[i:i+SENTIMENT_BATCH_SIZE]
+               for i in range(0, len(reviews), SENTIMENT_BATCH_SIZE)]
 
-    for b_idx, batch in enumerate(batches):
+    def _run_batch(indexed):
+        b_idx, batch = indexed
         offset = b_idx * SENTIMENT_BATCH_SIZE
         log(
             f"[dim]  Batch {b_idx+1}/{len(batches)} — reviews "
             f"r{offset+1}–r{offset+len(batch)}[/dim]"
         )
         prompt = _sentiment_prompt_for_batch(batch, offset)
-        result = call_groq(prompt, model=STRONG_MODEL, max_tokens=4096)
-        batch_results.append(result)
-        if b_idx < len(batches) - 1:
-            time.sleep(1.2)   # respect Groq rate limits
+        return b_idx, call_groq(prompt, model=STRONG_MODEL, max_tokens=4096)
+
+    # Batches are independent, so run them concurrently. The token-bucket limiter
+    # inside call_groq enforces Groq's TPM/RPM budget, which the old flat
+    # sleep(1.2) between serial calls only approximated.
+    workers = max(1, min(SENTIMENT_MAX_WORKERS, len(batches)))
+    if workers == 1 or len(batches) == 1:
+        results = [_run_batch((i, b)) for i, b in enumerate(batches)]
+    else:
+        log(f"[dim]  Running {len(batches)} batches across {workers} workers[/dim]")
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(_run_batch, enumerate(batches)))
+
+    # Order matters: batch 0 holds the most recent reviews and supplies the
+    # temporal trend, so restore submission order before merging.
+    batch_results = [r for _, r in sorted(results, key=lambda pair: pair[0])]
 
     merged = validate_evidence_ids(_merge_sentiment_batches(batch_results), reviews, "Model A sentiment")
 
