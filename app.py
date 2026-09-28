@@ -488,6 +488,34 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
     # TAB 1 — Executive Verdict
     # ══════════════════════════════════════════════════════
     with tab_verdict:
+        # ── How the deterministic engine got here ─────────────────────────────
+        scoring_bd = (data.get("scoring") or {}).get("score_breakdown", {}) or rec.get("score_breakdown", {})
+        sv1, sv2, sv3 = st.columns(3)
+        with sv1:
+            st.metric("Visit Score", f"{rec.get('visit_score', scoring_bd.get('final_score', '—'))}/10")
+        with sv2:
+            _conf = rec.get("confidence")
+            st.metric(
+                "Data Sufficiency",
+                f"{_conf:.0%}" if isinstance(_conf, (int, float)) else "—",
+                help="How well the inputs support this verdict: sample size, reviewer "
+                     "agreement, trust, and how much was independently audited. "
+                     "A heuristic, not a calibrated probability.",
+            )
+        with sv3:
+            _pen = scoring_bd.get("risk_penalty", 0)
+            st.metric("Risk Penalty", f"-{_pen}" if _pen else "none")
+
+        _used    = scoring_bd.get("components_used") or []
+        _missing = scoring_bd.get("components_missing") or []
+        if _used:
+            st.caption(
+                "⚖️ Score built from: **" + ", ".join(esc(u) for u in _used) + "**"
+                + (" · no data for: " + ", ".join(esc(m) for m in _missing) + " (weights renormalised)"
+                   if _missing else "")
+            )
+
+        st.divider()
         col_pro, col_con = st.columns(2)
         with col_pro:
             st.subheader("✅ Genuine Strengths")
@@ -528,7 +556,22 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
         bd  = rec.get("score_breakdown", {})
         asp = sentiment.get("aspect_scores", {})
         score_rows = []
-        if bd:
+        if scoring_bd:
+            # Full engine breakdown — only components that actually had data.
+            for _key, _label in [
+                ("sentiment_comp",   "Sentiment"),
+                ("aspect_comp",      "Aspects"),
+                ("rating_comp",      "Google Rating"),
+                ("trust_comp",       "Trust"),
+                ("consistency_comp", "Consistency"),
+                ("recency_comp",     "Recency"),
+            ]:
+                _v = scoring_bd.get(_key)
+                if isinstance(_v, (int, float)):
+                    score_rows.append((_label, _v))
+            if isinstance(scoring_bd.get("final_score"), (int, float)):
+                score_rows.append(("Final Score", scoring_bd["final_score"]))
+        elif bd:
             score_rows += [
                 ("Sentiment",     bd.get("sentiment_score", 0)),
                 ("Google Rating", bd.get("rating_score",    0)),

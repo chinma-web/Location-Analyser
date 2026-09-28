@@ -13,6 +13,13 @@ import urllib.parse
 from collections import Counter
 from dotenv import load_dotenv
 
+from scoring import (                      # deterministic scoring engine
+    DEFAULT_CONFIG as DEFAULT_SCORING_CONFIG,
+    ScoringConfig,
+    score_location,
+    verdict_for,
+)
+
 load_dotenv()
 
 try:
@@ -1649,192 +1656,35 @@ def apply_corrections(sentiment: dict, guardrail: dict, verification: dict) -> t
 # ── MODULE 6: Deterministic Python Scoring & Recommendation ──────────────────
 
 def calculate_final_score(
-    reviews:     list,
-    place_info:  dict,
-    sentiment:   dict,
-    guardrail:   dict,
+    reviews:      list,
+    place_info:   dict,
+    sentiment:    dict,
+    guardrail:    dict,
     verification: dict,
+    cfg:          ScoringConfig = DEFAULT_SCORING_CONFIG,
 ) -> dict:
     """
-    DETERMINISTIC Python scoring engine.
-    Neither Model A nor Model B decides the verdict.
-    Weights:
-        Sentiment score   30%
-        Aspect score      25%
-        Google rating     15%
-        Trust/guardrail   15%
-        Review consistency 10%
-        Recency            5%
+    DETERMINISTIC scoring. Neither Model A nor Model B decides the verdict.
+
+    The maths lives in `scoring.py` (pure, no I/O, unit-tested); this wrapper
+    only logs. Weights are declared in `ScoringConfig` and renormalised over the
+    components that actually have data — a place with no aspect scores is no
+    longer silently treated as a 5/10 on aspects.
     """
-    n = len(reviews)
+    result = score_location(reviews, place_info, sentiment, guardrail, verification, cfg)
 
-    # ── 1. Sentiment component (0-10) ──
-    raw_s          = sentiment.get("sentiment_score", 0.0)      # -1 to +1
-    sentiment_comp = round((raw_s + 1) / 2 * 10, 2)             # → 0-10
-
-    # ── 2. Aspect component (0-10) — weighted mean of scored aspects ──
-    aspect_weights = {
-        "food_quality":    1.5,
-        "service":         1.5,
-        "ambience":        1.2,
-        "value_for_money": 1.0,
-        "cleanliness":     1.0,
-        "crowd_wait_time": 0.8,
-        "accessibility":   0.5,
-    }
-    asp_scores = sentiment.get("aspect_scores", {})
-    weighted_sum = 0.0
-    weight_total = 0.0
-    for k, w in aspect_weights.items():
-        v = asp_scores.get(k, {})
-        score = v.get("score") if isinstance(v, dict) else None
-        if score is not None:
-            weighted_sum += score * w
-            weight_total += w
-    aspect_comp = round(weighted_sum / weight_total, 2) if weight_total > 0 else 5.0
-
-    # ── 3. Google rating component (0-10) ──
-    google_score = place_info.get("google_score") or 0
-    rating_comp  = round(float(google_score) * 2, 2)   # 5-star → 10-point
-
-    # If no Google score, fall back to avg scraped rating
-    if rating_comp == 0 and reviews:
-        avg_scraped = sum(r["rating"] for r in reviews) / len(reviews)
-        rating_comp = round(avg_scraped * 2, 2)
-
-    # ── 4. Trust/guardrail component (0-10) ──
-    # Unknown trust is NEUTRAL (0.5), not optimistic (0.7): absence of evidence
-    # about authenticity is not evidence of authenticity.
-    trust_score = guardrail.get("trust_score")
-    trust_score = trust_score if isinstance(trust_score, (int, float)) else 0.5
-    fake_prob   = guardrail.get("fake_review_probability")
-    fake_prob   = fake_prob if isinstance(fake_prob, (int, float)) else 0.2
-    trust_comp  = round((trust_score - fake_prob * 0.5) * 10, 2)
-    trust_comp  = max(0.0, min(10.0, trust_comp))
-
-    # Verification modifier. A completed audit that self-reports an accuracy scales
-    # trust by it; a run where verification did NOT happen is discounted rather
-    # than silently treated as a clean pass.
-    v_status  = verification.get("verification_status")
-    verif_acc = verification.get("accuracy")
-    if v_status in VERIFICATION_COMPLETED and isinstance(verif_acc, (int, float)):
-        trust_comp = round(trust_comp * (0.5 + verif_acc * 0.5), 2)
-    elif v_status not in VERIFICATION_COMPLETED:
-        trust_comp = round(trust_comp * 0.85, 2)   # unverified → discounted, never boosted
-    trust_comp = max(0.0, min(10.0, trust_comp))
-
-    # ── 5. Guardrail risk penalties ──
-    # Only concerns the guardrail model actually graded contribute. Concerns we
-    # merely derived from Model 1's sentiment carry severity=None and are skipped
-    # here — they are already reflected in sentiment_comp, so charging for them
-    # again would double-count the same signal.
-    risk_penalty = 0.0
-    concerns     = guardrail.get("genuine_concerns", [])
-    for c in concerns:
-        if not isinstance(c, dict) or c.get("derived"):
-            continue
-        sev = c.get("severity")
-        if sev == "Major":
-            risk_penalty += 1.5
-        elif sev == "Moderate":
-            risk_penalty += 0.8
-        elif sev == "Minor":
-            risk_penalty += 0.2
-    # Also penalise from verification corrections
-    for corr in verification.get("corrections", []):
-        if corr.get("evidence_review_ids"):
-            risk_penalty += 0.3
-    risk_penalty = min(risk_penalty, 3.0)   # cap penalty
-
-    # ── 6. Review consistency component (0-10) ──
-    per_review    = sentiment.get("per_review", [])
-    review_scores = [p.get("score", 0) for p in per_review if isinstance(p.get("score"), (int, float))]
-    if len(review_scores) >= 3:
-        mean_rs = sum(review_scores) / len(review_scores)
-        variance = sum((s - mean_rs) ** 2 for s in review_scores) / len(review_scores)
-        std_dev  = variance ** 0.5
-        consistency_comp = round(max(0, 10 - std_dev * 5), 2)
-    else:
-        consistency_comp = 5.0
-
-    # ── 7. Recency component (0-10) ──
-    # Use temporal trend if available
-    trend = sentiment.get("temporal_trend", {})
-    trend_label = trend.get("trend", "Stable")
-    recent_score_raw = trend.get("recent_score", raw_s)
-    recency_comp = round((recent_score_raw + 1) / 2 * 10, 2)
-    if trend_label == "Declining":
-        recency_comp = max(0.0, recency_comp - 1.5)
-    elif trend_label == "Improving":
-        recency_comp = min(10.0, recency_comp + 1.0)
-
-    # ── Weighted composite ──
-    composite = (
-        sentiment_comp  * 0.30 +
-        aspect_comp     * 0.25 +
-        rating_comp     * 0.15 +
-        trust_comp      * 0.15 +
-        consistency_comp * 0.10 +
-        recency_comp    * 0.05
-    )
-    final_score = round(max(0.0, min(10.0, composite - risk_penalty)), 2)
-
-    # ── Verdict ──
-    if final_score >= 8.0:
-        verdict = "HIGHLY RECOMMENDED"
-    elif final_score >= 6.5:
-        verdict = "RECOMMENDED"
-    elif final_score >= 4.5:
-        verdict = "VISIT WITH CAUTION"
-    else:
-        verdict = "NOT RECOMMENDED"
-
-    # ── Confidence ──
-    # Depends on: review count, consistency, evidence coverage, verifier accuracy, recency
-    base_conf = min(1.0, n / 50)              # more reviews → higher confidence
-    if consistency_comp >= 7:
-        base_conf = min(1.0, base_conf + 0.15)
-    if trust_score >= 0.8:
-        base_conf = min(1.0, base_conf + 0.1)
-    # Verification affects confidence only in proportion to how much was actually
-    # audited. `coverage` is the fraction of the 5 claim families the verifier
-    # genuinely reported on — a payload full of UNCHECKED fields earns no bonus.
-    coverage = verification.get("coverage")
-    coverage = coverage if isinstance(coverage, (int, float)) else 0.0
-    if v_status == "PASS":
-        base_conf = min(1.0, base_conf + 0.1 * coverage)
-        if isinstance(verif_acc, (int, float)):
-            base_conf = min(1.0, base_conf * (0.7 + verif_acc * 0.3))
-    elif v_status == "CORRECTED":
-        base_conf = max(0.0, base_conf - 0.05)
-    elif v_status == "FAIL":
-        base_conf = max(0.0, base_conf - 0.2)
-    else:   # UNAVAILABLE / UNKNOWN — nothing was independently checked
-        base_conf = max(0.0, base_conf - 0.15)
-    confidence = round(base_conf, 3)
-
-    score_breakdown = {
-        "sentiment_comp":    sentiment_comp,
-        "aspect_comp":       aspect_comp,
-        "rating_comp":       rating_comp,
-        "trust_comp":        trust_comp,
-        "consistency_comp":  consistency_comp,
-        "recency_comp":      recency_comp,
-        "risk_penalty":      risk_penalty,
-        "composite_raw":     round(composite, 2),
-        "final_score":       final_score,
-    }
-
+    bd      = result["score_breakdown"]
+    missing = bd.get("components_missing") or []
     console.print(
-        f"[bold green]✓  Python scoring: {verdict}  |  "
-        f"Score: {final_score}/10  |  Confidence: {confidence:.0%}[/bold green]"
+        f"[bold green]✓  Python scoring: {result['verdict']}  |  "
+        f"Score: {result['score']}/10  |  Data sufficiency: {result['confidence']:.0%}[/bold green]"
     )
-    return {
-        "verdict":        verdict,
-        "score":          final_score,
-        "confidence":     confidence,
-        "score_breakdown": score_breakdown,
-    }
+    console.print(
+        f"[dim]   Components used: {', '.join(bd.get('components_used', []))}"
+        + (f"  ·  no data for: {', '.join(missing)}" if missing else "")
+        + f"  ·  risk penalty: -{bd.get('risk_penalty', 0)}[/dim]"
+    )
+    return result
 
 
 # ── MODULE 7: Recommendation (Groq explanation only) ─────────────────────────
@@ -2157,6 +2007,9 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
             "missing_negative_evidence": verification.get("missing_negative_evidence", []),
         },
         "recommendation": rec,
+        # Full deterministic breakdown (which components were used, effective
+        # weights, penalties) so the UI can show how the score was built.
+        "scoring":        final_scoring,
         "model_info": {
             "three_model_pipeline": True,
             "model_1": {
