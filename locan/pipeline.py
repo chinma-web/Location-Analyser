@@ -5,8 +5,10 @@ deterministic score → written recommendation.
 
 import json
 import time
+from dataclasses import replace
 
 from locan import llm
+from locan.aspects import aspect_set_for_place
 from locan.cache import read_cache, write_cache
 from locan.config import (
     FAST_MODEL,
@@ -247,11 +249,17 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
     # ── Stage 2: Model A — Sentiment (batched over all reviews) ──
     if progress_callback:
         progress_callback(2, "Model A — Sentiment", f"Analyzing {len(reviews)} reviews in batches...")
-    sentiment = analyze_sentiment(reviews)
+    # Aspect set follows the place category: a hotel is scored on rooms, a gym
+    # on equipment. Unknown categories fall back to a generic set rather than
+    # being asked about food quality.
+    aspect_set = aspect_set_for_place(place_info)
+    log(f"[dim]   Aspect set: {aspect_set.name} ({', '.join(aspect_set.keys)})[/dim]")
+
+    sentiment = analyze_sentiment(reviews, aspect_set)
 
     # Extractive grounding: count what reviewers literally wrote, so the UI can
     # separate keywords that appear in the text from ones the model invented.
-    sentiment = ground_sentiment(sentiment, reviews)
+    sentiment = ground_sentiment(sentiment, reviews, aspect_set.lexicon)
     _log_grounding(sentiment)
 
     # ── Stage 3: Model A — Guardrail ──
@@ -291,8 +299,12 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
     # ── Stage 6: Python scoring ──
     if progress_callback:
         progress_callback(5, "Python Scoring", "Computing deterministic final score and verdict...")
+    # Scoring weights follow the same aspect set, so the weighted mean is taken
+    # over aspects that exist for this kind of place.
+    scoring_cfg = replace(DEFAULT_SCORING_CONFIG, aspect_weights=aspect_set.weights)
     final_scoring = calculate_final_score(
-        reviews, place_info, verified_sentiment, verified_guardrail, verification
+        reviews, place_info, verified_sentiment, verified_guardrail, verification,
+        scoring_cfg,
     )
 
     # ── Stage 7: Groq explanation ──

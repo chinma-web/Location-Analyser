@@ -4,6 +4,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 from locan import llm
+from locan.aspects import FOOD, AspectSet, prompt_schema
 from locan.config import STRONG_MODEL
 from locan.logging_utils import log
 from locan.reviews import validate_evidence_ids
@@ -20,13 +21,21 @@ POLARISED_BATCH_SPREAD = 0.6
 
 # ── MODULE 2: Model A — Sentiment Analysis (Groq, batched) ───────────────────
 
-def _sentiment_prompt_for_batch(batch: list, batch_offset: int) -> str:
-    """Build the sentiment analysis prompt for one batch of reviews."""
+def _sentiment_prompt_for_batch(batch: list, batch_offset: int,
+                                aspect_set: AspectSet = FOOD) -> str:
+    """
+    Build the sentiment analysis prompt for one batch of reviews.
+
+    The aspect schema comes from the place category, so a hotel is asked about
+    rooms and a gym about equipment instead of everything being scored as if it
+    were a restaurant.
+    """
     reviews_block = "\n---\n".join(
         f"[{r.get('id') or f'r{batch_offset + i + 1}'}] ⭐{r['rating']}/5  "
         f"date:{str(r.get('date',''))[:10]}\n{r['text'][:350]}"
         for i, r in enumerate(batch)
     )
+    aspect_block = prompt_schema(aspect_set)
     return f"""You are an expert review analyst. Perform DEEP multi-dimensional sentiment analysis
 on the following location reviews. Review IDs are shown as [rN] — use them in evidence fields.
 Return ONLY valid JSON matching this EXACT structure (no markdown, no explanation):
@@ -42,15 +51,7 @@ Return ONLY valid JSON matching this EXACT structure (no markdown, no explanatio
       "key_phrase": "one crisp sentence capturing the review"
     }}
   ],
-  "aspect_scores": {{
-    "food_quality":    {{"score": 7.5, "reviews_mentioning": 5, "summary": "brief note or null", "evidence_review_ids": ["r1"]}},
-    "service":         {{"score": 8.0, "reviews_mentioning": 3, "summary": "brief note or null", "evidence_review_ids": []}},
-    "ambience":        {{"score": 6.5, "reviews_mentioning": 2, "summary": "brief note or null", "evidence_review_ids": []}},
-    "value_for_money": {{"score": 7.0, "reviews_mentioning": 2, "summary": "brief note or null", "evidence_review_ids": []}},
-    "cleanliness":     {{"score": 8.5, "reviews_mentioning": 1, "summary": "brief note or null", "evidence_review_ids": []}},
-    "accessibility":   {{"score": 7.0, "reviews_mentioning": 1, "summary": "brief note or null", "evidence_review_ids": []}},
-    "crowd_wait_time": {{"score": 5.5, "reviews_mentioning": 3, "summary": "brief note or null", "evidence_review_ids": []}}
-  }},
+  "aspect_scores": {aspect_block},
   "themes": [
     {{
       "name": "theme name",
@@ -105,7 +106,7 @@ REVIEWS:
 {reviews_block}"""
 
 
-def _merge_sentiment_batches(batch_results: list) -> dict:
+def _merge_sentiment_batches(batch_results: list, aspect_set: AspectSet = FOOD) -> dict:
     """Merge multiple batch sentiment results into one combined result."""
     if not batch_results:
         return {}
@@ -125,8 +126,7 @@ def _merge_sentiment_batches(batch_results: list) -> dict:
         },
     }
 
-    aspect_keys = ["food_quality","service","ambience","value_for_money",
-                   "cleanliness","accessibility","crowd_wait_time"]
+    aspect_keys = aspect_set.keys
     aspect_accum = {k: {"scores": [], "mentions": 0, "evidence_ids": [], "summaries": []}
                     for k in aspect_keys}
 
@@ -246,7 +246,7 @@ def _merge_sentiment_batches(batch_results: list) -> dict:
     return merged
 
 
-def analyze_sentiment(reviews: list) -> dict:
+def analyze_sentiment(reviews: list, aspect_set: AspectSet = FOOD) -> dict:
     """
     MODEL A — Deep sentiment analysis using Groq (STRONG_MODEL).
     Processes ALL reviews via batching — no arbitrary [:20] truncation.
@@ -271,7 +271,7 @@ def analyze_sentiment(reviews: list) -> dict:
             f"[dim]  Batch {b_idx+1}/{len(batches)} — reviews "
             f"r{offset+1}–r{offset+len(batch)}[/dim]"
         )
-        prompt = _sentiment_prompt_for_batch(batch, offset)
+        prompt = _sentiment_prompt_for_batch(batch, offset, aspect_set)
         return b_idx, llm.call_groq(prompt, model=STRONG_MODEL, max_tokens=4096)
 
     # Batches are independent, so run them concurrently. The token-bucket limiter
@@ -289,7 +289,7 @@ def analyze_sentiment(reviews: list) -> dict:
     # temporal trend, so restore submission order before merging.
     batch_results = [r for _, r in sorted(results, key=lambda pair: pair[0])]
 
-    merged = validate_evidence_ids(_merge_sentiment_batches(batch_results), reviews, "Model A sentiment")
+    merged = validate_evidence_ids(_merge_sentiment_batches(batch_results, aspect_set), reviews, "Model A sentiment")
 
     # ── Always compute rating distribution from raw data ──
     counts = {"5": 0, "4": 0, "3": 0, "2": 0, "1": 0}

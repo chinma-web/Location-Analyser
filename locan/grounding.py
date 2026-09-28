@@ -219,7 +219,7 @@ def aspect_mentions(reviews: list, lexicon: dict = None) -> dict:
     return result
 
 
-def ground_sentiment(sentiment: dict, reviews: list) -> dict:
+def ground_sentiment(sentiment: dict, reviews: list, lexicon: dict = None) -> dict:
     """
     Attach extractive evidence to a merged sentiment payload.
 
@@ -233,7 +233,7 @@ def ground_sentiment(sentiment: dict, reviews: list) -> dict:
         "positive_keywords": ground_keywords(sentiment.get("positive_keywords") or [], reviews),
         "negative_keywords": ground_keywords(sentiment.get("negative_keywords") or [], reviews),
         "top_terms": top_terms(reviews),
-        "aspect_mentions": aspect_mentions(reviews),
+        "aspect_mentions": aspect_mentions(reviews, lexicon),
     }
 
     # Flag aspects the model scored without any lexical support in the text.

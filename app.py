@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import locan as loc_engine
+from locan.aspects import aspect_set_for_place
 from locan.ui import esc  # HTML-escape helper for unsafe_allow_html blocks
 
 # Library logs go to the server's stderr with markup stripped, not raw Rich
@@ -293,6 +294,7 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
 
     place_info   = data.get("place_info", {})
     reviews      = data.get("reviews", [])
+    aspect_set   = aspect_set_for_place(data.get("place_info", {}))
     sentiment    = data.get("sentiment", {})
     guardrail    = data.get("guardrail", {})
     rec          = data.get("recommendation", {})
@@ -587,11 +589,8 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
                 ("Trust",         bd.get("trust_score",     0)),
                 ("Final Score",   bd.get("composite",       0)),
             ]
-        for asp_key, asp_label in [
-            ("food_quality","Food"), ("service","Service"),
-            ("ambience","Ambience"), ("value_for_money","Value"),
-            ("cleanliness","Cleanliness"), ("crowd_wait_time","Crowd/Wait"),
-        ]:
+        for asp_key in asp:
+            asp_label = aspect_set.label_for(asp_key)
             v = asp.get(asp_key, {})
             sc = v.get("score") if isinstance(v, dict) else None
             if sc is not None:
@@ -681,11 +680,9 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
         # Aspect radar + detail bars
         st.subheader("🔬 Aspect-Based Scores (0 – 10)")
         asp     = sentiment.get("aspect_scores", {})
-        asp_map = {
-            "food_quality":"Food", "service":"Service", "ambience":"Ambience",
-            "value_for_money":"Value", "cleanliness":"Cleanliness",
-            "accessibility":"Accessibility", "crowd_wait_time":"Crowd / Wait",
-        }
+        # Aspects depend on the place category (hotel -> rooms, gym -> equipment),
+        # so render whatever the analysis actually produced.
+        asp_map = {key: aspect_set.label_for(key) for key in asp}
         asp_rows = []
         for key, label in asp_map.items():
             v = asp.get(key, {})
@@ -863,7 +860,7 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
             by_id = {r.get("id") or f"r{i+1}": r for i, r in enumerate(reviews)}
             aspects = sentiment.get("aspect_scores", {})
             for aspect, entry in (grounding.get("aspect_mentions") or {}).items():
-                label = aspect.replace("_", " ").title()
+                label = aspect_set.label_for(aspect)
                 model_score = (aspects.get(aspect) or {}).get("score")
                 score_txt = f"{model_score}/10" if isinstance(model_score, (int, float)) else "not scored"
                 header = f"{label} — {entry['review_count']} reviews mention it · model score {score_txt}"
