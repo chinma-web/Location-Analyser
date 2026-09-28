@@ -7,7 +7,7 @@ Two-Model Architecture:
 Final recommendation: deterministic Python scoring only.
 """
 
-import os, json, time, sys, re, hashlib
+import os, json, time, sys, re, hashlib, logging
 import urllib.request
 import urllib.parse
 from collections import Counter
@@ -70,6 +70,77 @@ SENTIMENT_BATCH_SIZE = 15
 POLARISED_BATCH_SPREAD = 0.6
 
 console = Console()
+
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+# Library code must not own the terminal. Everything below goes through the
+# standard logging module so the CLI can render it with Rich, Streamlit can send
+# it to stderr, and tests can silence it — previously every run printed directly
+# to stdout no matter who was calling.
+
+logger = logging.getLogger("locan")
+logger.addHandler(logging.NullHandler())
+
+# Level is inferred from the leading Rich tag, so call sites stay readable.
+_LEVEL_BY_TAG = {
+    "red":     logging.ERROR,
+    "yellow":  logging.WARNING,
+    "dim":     logging.DEBUG,
+    "cyan":    logging.INFO,
+    "green":   logging.INFO,
+    "magenta": logging.INFO,
+    "blue":    logging.INFO,
+}
+_TAG_RE   = re.compile(r"\[/?([a-zA-Z0-9_#\s]+)\]")
+_LEAD_TAG = re.compile(r"^\[(?:bold\s+|italic\s+)?([a-zA-Z]+)")
+
+
+def strip_markup(message: str) -> str:
+    """Remove Rich markup so plain handlers don't print literal [green] tags."""
+    return _TAG_RE.sub("", message)
+
+
+def log(message: str) -> None:
+    """Log a Rich-markup message, inferring its level from the leading tag."""
+    match = _LEAD_TAG.match(message.strip())
+    level = _LEVEL_BY_TAG.get(match.group(1).lower(), logging.INFO) if match else logging.INFO
+    logger.log(level, message)
+
+
+class _StripMarkupFormatter(logging.Formatter):
+    def format(self, record):
+        record.msg = strip_markup(str(record.msg))
+        return super().format(record)
+
+
+def configure_logging(level: str = None, rich_output: bool = False) -> None:
+    """
+    Attach a handler to the `locan` logger. Safe to call more than once.
+
+    rich_output=True is for the CLI (colour, markup); the default plain handler
+    strips markup and is what the Streamlit app and scripts should use.
+    """
+    level = (level or os.getenv("LOG_LEVEL", "INFO")).upper()
+    for handler in list(logger.handlers):
+        if not isinstance(handler, logging.NullHandler):
+            logger.removeHandler(handler)
+
+    if rich_output:
+        try:
+            from rich.logging import RichHandler
+            handler = RichHandler(console=console, markup=True, show_path=False,
+                                  show_time=False, show_level=False)
+            handler.setFormatter(logging.Formatter("%(message)s"))
+        except ImportError:
+            handler = logging.StreamHandler()
+            handler.setFormatter(_StripMarkupFormatter("%(message)s"))
+    else:
+        handler = logging.StreamHandler()
+        handler.setFormatter(_StripMarkupFormatter("%(levelname)s  %(message)s"))
+
+    logger.setLevel(level)
+    logger.addHandler(handler)
+    logger.propagate = False
 
 
 # ── Configuration validation & lazy clients ───────────────────────────────────
@@ -166,7 +237,7 @@ def read_cache(location: str, max_reviews: int):
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except Exception as e:
-        console.print(f"[yellow]⚠ Cache read failed ({e}) — re-running pipeline.[/yellow]")
+        log(f"[yellow]⚠ Cache read failed ({e}) — re-running pipeline.[/yellow]")
         return None
 
     meta = data.get("cache_meta") or {}
@@ -174,16 +245,16 @@ def read_cache(location: str, max_reviews: int):
     if meta.get("query") != _normalise_cache_query(location) \
             or meta.get("max_reviews") != int(max_reviews) \
             or meta.get("schema_version") != CACHE_SCHEMA_VERSION:
-        console.print("[yellow]⚠ Cache entry does not match this query — ignoring.[/yellow]")
+        log("[yellow]⚠ Cache entry does not match this query — ignoring.[/yellow]")
         return None
 
     age_h = (time.time() - meta.get("cached_at", 0)) / 3600
     if age_h > CACHE_TTL_HOURS:
-        console.print(f"[dim]Cache entry is {age_h:.0f}h old (TTL {CACHE_TTL_HOURS:.0f}h) — refreshing.[/dim]")
+        log(f"[dim]Cache entry is {age_h:.0f}h old (TTL {CACHE_TTL_HOURS:.0f}h) — refreshing.[/dim]")
         return None
 
     data["cache_meta"] = {**meta, "age_hours": round(age_h, 1), "served_from_cache": True}
-    console.print(f"[bold green]⚡ Cache hit[/bold green] [dim]({age_h:.1f}h old) → {path}[/dim]")
+    log(f"[bold green]⚡ Cache hit[/bold green] [dim]({age_h:.1f}h old) → {path}[/dim]")
     return data
 
 
@@ -260,13 +331,13 @@ def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> d
                 time.sleep(1)
                 continue
 
-            console.print("[yellow]⚠  JSON parse failed — returning empty result[/yellow]")
+            log("[yellow]⚠  JSON parse failed — returning empty result[/yellow]")
             return {}
 
         except Exception as e:
             err_str = str(e).lower()
             if "decommissioned" in err_str or "not found" in err_str:
-                console.print(f"[yellow]⚠ Model `{model}` is deprecated or unavailable on Groq. Falling back to `{STRONG_MODEL}`...[/yellow]")
+                log(f"[yellow]⚠ Model `{model}` is deprecated or unavailable on Groq. Falling back to `{STRONG_MODEL}`...[/yellow]")
                 try:
                     res = get_groq().chat.completions.create(
                         model=STRONG_MODEL if model != STRONG_MODEL else FAST_MODEL,
@@ -287,9 +358,9 @@ def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> d
                         return json.loads(raw[start:end+1])
                     return json.loads(raw)
                 except Exception as fb_err:
-                    console.print(f"[red]Fallback model call failed: {fb_err}[/red]")
+                    log(f"[red]Fallback model call failed: {fb_err}[/red]")
             else:
-                console.print(f"[red]Groq error: {e}[/red]")
+                log(f"[red]Groq error: {e}[/red]")
             if attempt == 0:
                 time.sleep(2)
                 continue
@@ -364,7 +435,7 @@ def geocode_city(city: str) -> tuple:
             if len(coords) == 2:
                 return coords[1], coords[0]
     except Exception as e:
-        console.print(f"[yellow]City geocode error: {e}[/yellow]")
+        log(f"[yellow]City geocode error: {e}[/yellow]")
     return None, None
 
 
@@ -385,7 +456,7 @@ def get_place_suggestions(query: str, city: str = "", limit: int = 7) -> list:
     try:
         data = _photon_request(params)
     except Exception as e:
-        console.print(f"[yellow]Photon autocomplete error: {e}[/yellow]")
+        log(f"[yellow]Photon autocomplete error: {e}[/yellow]")
         return []
 
     city_lower = city.strip().lower()
@@ -440,7 +511,7 @@ def get_city_suggestions(query: str, limit: int = 6) -> list:
     try:
         data = _photon_request(params)
     except Exception as e:
-        console.print(f"[yellow]City suggestions error: {e}[/yellow]")
+        log(f"[yellow]City suggestions error: {e}[/yellow]")
         return []
 
     city_types = {"city", "town", "village", "municipality", "borough",
@@ -479,10 +550,10 @@ def expand_maps_url(url: str) -> str:
         )
         with urllib.request.urlopen(req, timeout=8) as resp:
             final_url = resp.url
-        console.print(f"[dim]🔗 Expanded URL: {final_url[:80]}…[/dim]")
+        log(f"[dim]🔗 Expanded URL: {final_url[:80]}…[/dim]")
         return final_url
     except Exception as e:
-        console.print(f"[yellow]URL expand warning: {e} — using original URL[/yellow]")
+        log(f"[yellow]URL expand warning: {e} — using original URL[/yellow]")
         return url
 
 
@@ -529,7 +600,7 @@ def validate_evidence_ids(payload: dict, reviews: list, stage: str) -> dict:
     _drop_unknown_ids(payload, known, dropped)
     if dropped:
         uniq = sorted(set(dropped))
-        console.print(
+        log(
             f"[yellow]\u26a0  {stage}: dropped {len(dropped)} citation(s) to "
             f"non-existent reviews ({', '.join(uniq[:8])}{'…' if len(uniq) > 8 else ''})[/yellow]"
         )
@@ -549,7 +620,7 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
         cleaned_review_count    — after dedup / spam filtering
         analyzed_review_count   — set later after cleaning (same as cleaned here)
     """
-    console.print(f"\n[bold cyan]📡  Step 1 — Scraping:[/bold cyan] {location}")
+    log(f"\n[bold cyan]📡  Step 1 — Scraping:[/bold cyan] {location}")
 
     is_url      = location.strip().startswith("http")
     is_place_id = location.strip().lower().startswith("place_id:")
@@ -582,7 +653,7 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
             place_lat  = sugg[0]["lat"]
             place_lon  = sugg[0]["lon"]
             place_name = sugg[0]["search_name"]
-            console.print(f"[dim]🌐 Place geocoded: {place_name} -> lat={place_lat:.5f}, lon={place_lon:.5f}[/dim]")
+            log(f"[dim]🌐 Place geocoded: {place_name} -> lat={place_lat:.5f}, lon={place_lon:.5f}[/dim]")
             maps_url = (
                 f"https://www.google.com/maps/search/"
                 f"{urllib.parse.quote(place_query)}"
@@ -597,7 +668,7 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
                 "includeOpeningHours": True,
             }
         else:
-            console.print("[yellow]⚠ Place geocoding failed — using plain text search[/yellow]")
+            log("[yellow]⚠ Place geocoding failed — using plain text search[/yellow]")
             run_input = {
                 "searchStringsArray":  [location.strip()],
                 "maxCrawledPlaces":    5,
@@ -620,7 +691,7 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
 
         all_places = list(get_apify().dataset(dataset_id).iterate_items())
         if not all_places:
-            console.print("[red]✗  No places returned by Apify.[/red]")
+            log("[red]✗  No places returned by Apify.[/red]")
             return [], {}, _empty_review_stats()
 
         best = max(all_places, key=lambda p: p.get("reviewsCount") or 0)
@@ -672,7 +743,7 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
         }
 
         name = place_info.get("name", location)
-        console.print(
+        log(
             f"[green]✓  Scraped {raw_scraped_count} raw  |  "
             f"{usable_text_review_count} usable  |  "
             f"{cleaned_review_count} after cleaning  for \"{name}\"[/green]"
@@ -680,7 +751,7 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
         return cleaned, place_info, review_stats
 
     except Exception as e:
-        console.print(f"[red]✗  Apify scraping failed: {e}[/red]")
+        log(f"[red]✗  Apify scraping failed: {e}[/red]")
         raise RuntimeError(f"Unable to collect reviews right now. Apify error: {e}")
 
 
@@ -947,7 +1018,7 @@ def analyze_sentiment(reviews: list) -> dict:
     Processes ALL reviews via batching — no arbitrary [:20] truncation.
     Batch size is SENTIMENT_BATCH_SIZE (default 15) to stay within token limits.
     """
-    console.print(
+    log(
         f"\n[bold cyan]🧠  Model A — Sentiment analysis (Groq / {STRONG_MODEL})[/bold cyan]  "
         f"[dim]{len(reviews)} reviews[/dim]"
     )
@@ -962,7 +1033,7 @@ def analyze_sentiment(reviews: list) -> dict:
 
     for b_idx, batch in enumerate(batches):
         offset = b_idx * SENTIMENT_BATCH_SIZE
-        console.print(
+        log(
             f"[dim]  Batch {b_idx+1}/{len(batches)} — reviews "
             f"r{offset+1}–r{offset+len(batch)}[/dim]"
         )
@@ -986,7 +1057,7 @@ def analyze_sentiment(reviews: list) -> dict:
     o  = merged.get("overall_sentiment", "Unknown")
     tr = merged.get("temporal_trend", {}).get("trend", "?")
     kw = ", ".join(merged.get("positive_keywords", [])[:5]) or "—"
-    console.print(
+    log(
         f"[green]✓  Model A sentiment: {o}  |  Score: {s:.2f}  |  "
         f"Trend: {tr}  |  Top keywords: {kw}[/green]"
     )
@@ -1078,7 +1149,7 @@ def guardrail_analysis(reviews: list, sentiment: dict) -> dict:
     MODEL A — Deep guardrail / authenticity analysis using Groq STRONG_MODEL.
     Uses up to 30 reviews for the LLM pass; heuristics run on all reviews.
     """
-    console.print(
+    log(
         f"\n[bold cyan]🛡  Model A — Guardrail analysis "
         f"(Groq / {FAST_MODEL})[/bold cyan]"
     )
@@ -1192,7 +1263,7 @@ Return ONLY this JSON:
     rq  = result.get("review_quality", "?")
     fp  = result.get("fake_review_probability", 0)
     adj = result.get("rating_integrity", {}).get("adjusted_true_rating", "?")
-    console.print(
+    log(
         f"[green]✓  Trust: {ts:.0%}  |  Quality: {rq}  |  "
         f"Fake prob: {fp:.0%}  |  Adj. rating: {adj}/5[/green]"
     )
@@ -1298,14 +1369,14 @@ def _log_verification(result: dict, note: str = "") -> None:
     n_ok     = len(result.get("fields_checked", []))
     suffix   = f" ({note})" if note else ""
     colour   = "green" if status in VERIFICATION_COMPLETED else "yellow"
-    console.print(
+    log(
         f"[{colour}]✓  Model 2 Verifier (Groq){suffix}: {status}  |  "
         f"Fields audited: {n_ok}/{len(VERIFIED_FIELDS)}  |  Self-reported accuracy: {acc_str}  |  "
         f"Hallucination: {hall_str}  |  Corrections: {n_corr}[/{colour}]"
     )
     unchecked = result.get("fields_unchecked", [])
     if unchecked:
-        console.print(f"[dim]   Unchecked fields (verifier said nothing usable): {', '.join(unchecked)}[/dim]")
+        log(f"[dim]   Unchecked fields (verifier said nothing usable): {', '.join(unchecked)}[/dim]")
 
 
 VERIFIER_SYSTEM_PROMPT = """You are Model 2 (Independent Verifier), cross-auditing Model 1's analysis against real Google Maps reviews.
@@ -1342,13 +1413,13 @@ def verify_analysis(reviews: list, model_a_sentiment: dict, model_a_guardrail: d
     Returns verification JSON or an UNAVAILABLE status dict on failure.
     Does NOT generate a recommendation or score.
     """
-    console.print(
+    log(
         f"\n[bold magenta]🔍  Model B — Independent verification "
         f"(Groq / {VERIFIER_MODEL})[/bold magenta]"
     )
 
     if not GROQ_KEY:
-        console.print("[yellow]⚠  GROQ_API_KEY not set — Model B verification unavailable.[/yellow]")
+        log("[yellow]⚠  GROQ_API_KEY not set — Model B verification unavailable.[/yellow]")
         return _unavailable_verification("GROQ_API_KEY is not configured.")
 
     # ── Trim reviews: cap at 20, text at 150 chars ────────────────────────────
@@ -1445,7 +1516,7 @@ RULES: Only correct claims unsupported by review text. Every correction needs ev
     except RuntimeError as e:
         err_msg = str(e)
         if "null content" in err_msg.lower() and len(review_list) > 10:
-            console.print("[yellow]⚠  Model 2 returned null, retrying with fewer reviews...[/yellow]")
+            log("[yellow]⚠  Model 2 returned null, retrying with fewer reviews...[/yellow]")
             retry_list = review_list[:10]
             retry_prompt = user_prompt.replace(json.dumps(review_list, indent=2), json.dumps(retry_list, indent=2))
             try:
@@ -1456,10 +1527,10 @@ RULES: Only correct claims unsupported by review text. Every correction needs ev
                 _log_verification(result, note="10-review retry")
                 return result
             except RuntimeError as e2:
-                console.print(f"[yellow]⚠  Model 2 unavailable: {e2}[/yellow]")
+                log(f"[yellow]⚠  Model 2 unavailable: {e2}[/yellow]")
                 return _unavailable_verification(str(e2))
         
-        console.print(f"[yellow]⚠  Model 2 unavailable: {e}[/yellow]")
+        log(f"[yellow]⚠  Model 2 unavailable: {e}[/yellow]")
         return _unavailable_verification(str(e))
 
 
@@ -1584,7 +1655,7 @@ def apply_corrections(sentiment: dict, guardrail: dict, verification: dict) -> t
         # Only apply if there is actual review evidence
         evidence_ids = corr.get("evidence_review_ids", [])
         if not evidence_ids:
-            console.print(
+            log(
                 f"[dim]  Skipping correction for '{corr.get('field')}' "
                 f"— no evidence_review_ids provided[/dim]"
             )
@@ -1594,7 +1665,7 @@ def apply_corrections(sentiment: dict, guardrail: dict, verification: dict) -> t
         new_val = corr.get("corrected_claim", "")
         reason  = corr.get("reason", "")
 
-        console.print(
+        log(
             f"[cyan]  Applying correction: {field} — {reason[:80]}[/cyan]"
         )
 
@@ -1686,11 +1757,11 @@ def calculate_final_score(
 
     bd      = result["score_breakdown"]
     missing = bd.get("components_missing") or []
-    console.print(
+    log(
         f"[bold green]✓  Python scoring: {result['verdict']}  |  "
         f"Score: {result['score']}/10  |  Data sufficiency: {result['confidence']:.0%}[/bold green]"
     )
-    console.print(
+    log(
         f"[dim]   Components used: {', '.join(bd.get('components_used', []))}"
         + (f"  ·  no data for: {', '.join(missing)}" if missing else "")
         + f"  ·  risk penalty: -{bd.get('risk_penalty', 0)}[/dim]"
@@ -1712,7 +1783,7 @@ def generate_recommendation(
     Groq generates the EXPLANATION TEXT (pros, cons, tips, verdict text).
     It does NOT decide the score or the verdict label — those come from Python.
     """
-    console.print(
+    log(
         f"\n[bold cyan]💡  Generating verdict & explanation (Groq / {VERDICT_MODEL})[/bold cyan]"
     )
 
@@ -1803,7 +1874,7 @@ Return EXACTLY this JSON (use the provided verdict and visit_score as-is):
         "composite":       score,
     }
 
-    console.print(f"[green]✓  Explanation generated.[/green]")
+    log(f"[green]✓  Explanation generated.[/green]")
     return result
 
 
@@ -1892,7 +1963,7 @@ def display_report(location, place_info, reviews, sentiment, guardrail, rec, ver
 # ── Main Pipeline ──────────────────────────────────────────────────────────────
 
 def analyze(location: str, max_reviews: int = 30, progress_callback=None,
-            force_refresh: bool = False) -> dict:
+            force_refresh: bool = False, render_report: bool = False) -> dict:
     """
     Complete two-model pipeline:
       1. Apify — scrape reviews
@@ -1904,17 +1975,22 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
       7. Groq explanation — prose only, never overrides score
     """
     t0 = time.time()
-    console.print(Panel(
-        f"[bold]Location:[/bold]       {location}\n"
-        f"[bold]Max reviews:[/bold]    {max_reviews}\n"
-        f"[bold]Model 1 (Analyst):[/bold]  Groq / {STRONG_MODEL} (sentiment) + {FAST_MODEL} (guardrail)\n"
-        f"[bold]Model 2 (Verifier):[/bold] Groq / {VERIFIER_MODEL} (independent review audit & fact-check)\n"
-        f"[bold]Model 3 (Verdict):[/bold]  Groq / {VERDICT_MODEL} (final verdict & executive guide)\n"
-        f"[bold]Verification:[/bold]   {'required' if REQUIRE_VERIFICATION else 'preferred (active)'}\n"
-        f"[bold]Pipeline:[/bold]       Apify ➔ Model 1 (Analyst) ➔ Model 2 (Verifier) ➔ Python Scoring ➔ Model 3 (Verdict)",
-        title="[bold blue]🌐 3-Model Location Review AI Analyzer[/bold blue]",
-        expand=False,
-    ))
+    # Rich panels are CLI presentation, not library behaviour: the Streamlit app
+    # would otherwise dump them into the server's stdout on every run.
+    if render_report:
+        console.print(Panel(
+            f"[bold]Location:[/bold]       {location}\n"
+            f"[bold]Max reviews:[/bold]    {max_reviews}\n"
+            f"[bold]Model 1 (Analyst):[/bold]  Groq / {STRONG_MODEL} (sentiment) + {FAST_MODEL} (guardrail)\n"
+            f"[bold]Model 2 (Verifier):[/bold] Groq / {VERIFIER_MODEL} (independent review audit & fact-check)\n"
+            f"[bold]Model 3 (Verdict):[/bold]  Groq / {VERDICT_MODEL} (final verdict & executive guide)\n"
+            f"[bold]Verification:[/bold]   {'required' if REQUIRE_VERIFICATION else 'preferred (active)'}\n"
+            f"[bold]Pipeline:[/bold]       Apify ➔ Model 1 (Analyst) ➔ Model 2 (Verifier) ➔ Python Scoring ➔ Model 3 (Verdict)",
+            title="[bold blue]🌐 3-Model Location Review AI Analyzer[/bold blue]",
+            expand=False,
+        ))
+    else:
+        log(f"[cyan]Analyzing[/cyan] {location} (max {max_reviews} reviews)")
 
     # ── Stage 0: Cache lookup (hash of query + review count + schema) ──
     if not force_refresh:
@@ -1971,7 +2047,7 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
         if c.get("evidence_review_ids")
     ])
     if n_corrections:
-        console.print(f"[cyan]  {n_corrections} evidence-supported correction(s) applied.[/cyan]")
+        log(f"[cyan]  {n_corrections} evidence-supported correction(s) applied.[/cyan]")
 
     # Update analyzed count (= cleaned reviews actually fed to models)
     review_stats["analyzed_review_count"] = len(reviews)
@@ -1991,15 +2067,16 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
         verified_sentiment, verified_guardrail, final_scoring
     )
 
-    # Display report
-    display_report(
-        location, place_info, reviews,
-        verified_sentiment, verified_guardrail,
-        rec, verification, review_stats
-    )
+    # Terminal report is CLI-only
+    if render_report:
+        display_report(
+            location, place_info, reviews,
+            verified_sentiment, verified_guardrail,
+            rec, verification, review_stats
+        )
 
     elapsed = time.time() - t0
-    console.print(f"\n[dim]⏱  Total time: {elapsed:.1f}s[/dim]")
+    log(f"\n[dim]⏱  Total time: {elapsed:.1f}s[/dim]")
 
     # Save full JSON
     payload  = {
@@ -2046,7 +2123,7 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
         },
     }
     saved_to = write_cache(location, max_reviews, payload)
-    console.print(f"[dim]💾 Report saved → {saved_to}[/dim]")
+    log(f"[dim]💾 Report saved → {saved_to}[/dim]")
 
     return payload
 
@@ -2054,10 +2131,12 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    configure_logging(rich_output=True)
+
     _missing = validate_config(raise_on_error=False)
     if _missing:
-        console.print("[red bold]ERROR:[/red bold] Missing API keys: " + ", ".join(_missing))
-        console.print("Create a .env file (see .env.example) with APIFY_API_TOKEN and GROQ_API_KEY")
+        log("[red bold]ERROR:[/red bold] Missing API keys: " + ", ".join(_missing))
+        log("Create a .env file (see .env.example) with APIFY_API_TOKEN and GROQ_API_KEY")
         sys.exit(1)
 
     loc = ""
@@ -2081,7 +2160,7 @@ if __name__ == "__main__":
         except (EOFError, KeyboardInterrupt):
             loc = ""
         if not loc:
-            console.print("[red]No location entered.[/red]")
+            log("[red]No location entered.[/red]")
             sys.exit(1)
         try:
             n_input = console.input("[bold]Max reviews (default 30):[/bold] ").strip()
@@ -2089,4 +2168,4 @@ if __name__ == "__main__":
         except (EOFError, KeyboardInterrupt):
             n = 30
 
-    analyze(loc, n, force_refresh=force)
+    analyze(loc, n, force_refresh=force, render_report=True)
