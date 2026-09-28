@@ -164,11 +164,21 @@ _Two further bugs surfaced while writing the tests and were fixed: the consisten
 component could never drop below 5.5/10 (wrong std-dev scale), and polarised review
 batches were labelled "Neutral" instead of "Mixed"._
 
-### P2 — Speed & polish
-11. Parallel batch analysis + token-bucket rate limiter + `response_format=json_object`.
-12. Hoist tokenisation out of the O(n²) loops; cache geocoding.
-13. Split `location.py` into the `locan/` package.
-14. Delete dead code (`autocomplete_component/`, `streamlit-searchbox`).
+### P2 — Speed & polish — ✅ DONE
+11. ✅ Parallel batch analysis + token-bucket rate limiter + `response_format=json_object`
+    (`96baeb6`, json mode in the follow-up commit). Sentiment batches run on a
+    `ThreadPoolExecutor` (`SENTIMENT_MAX_WORKERS`, default 3) and every Groq call
+    acquires budget from a per-model token bucket sized from the documented TPM.
+    429s now honour `Retry-After`. `RATE_LIMIT_DISABLED=1` bypasses it.
+12. ✅ Hoist tokenisation out of the O(n²) loops; cache geocoding (`e0b269a`).
+    400 reviews: `_clean_reviews` 256 ms → 65 ms (~4×), `_heuristic_checks`
+    4.1 ms → 1.3 ms (~3×). Photon lookups are LRU-cached (256 entries).
+    Bonus: `expand_maps_url` was a server-side SSRF — it now does a HEAD request
+    against a Google-only host allowlist and re-checks the redirect target.
+13. ✅ Split `location.py` into the `locan/` package (`3146e15`) — 17 modules,
+    `location.py` kept as a compatibility shim. Also fixed the `location:main`
+    console script, which pointed at a function that never existed.
+14. ✅ Delete dead code (`autocomplete_component/`, `streamlit-searchbox`) (`781a0ee`).
 
 ### P3 — Product
 15. **Compare mode** (2–4 places side by side).

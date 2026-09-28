@@ -30,9 +30,28 @@ def _retry_after_seconds(message: str):
     return min(value, 60.0)   # never sleep longer than a minute on one hint
 
 
+# Models known to support Groq's JSON mode. Anything else falls back to
+# prompt-only instructions plus the repair path below.
+JSON_MODE_MODELS = ("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama-3.1-70b-versatile")
+
+# Set to "false" to disable server-side JSON mode (e.g. a model that rejects it).
+USE_JSON_MODE = os.getenv("USE_JSON_MODE", "true").lower() != "false"
+
+
+def supports_json_mode(model: str) -> bool:
+    return USE_JSON_MODE and model in JSON_MODE_MODELS
+
+
 def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> dict:
-    """Call Groq and parse the JSON response. Retries once on parse failure."""
+    """
+    Call Groq and parse the JSON response. Retries once on parse failure.
+
+    Where the model supports it we ask for JSON mode, which makes malformed
+    output structurally impossible; the extraction/repair path below still runs
+    for models that don't, and as a backstop for truncated responses.
+    """
     limiter = limiter_for(model)
+    kwargs = {"response_format": {"type": "json_object"}} if supports_json_mode(model) else {}
     for attempt in range(2):
         try:
             limiter.acquire(prompt, max_tokens)
@@ -44,6 +63,7 @@ def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> d
                 ],
                 temperature=0.2,
                 max_tokens=max_tokens,
+                **kwargs,
             )
             raw = res.choices[0].message.content.strip()
 

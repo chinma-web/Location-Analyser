@@ -211,3 +211,35 @@ def test_retry_after_parsing(message, expected):
 
 def test_retry_after_is_capped():
     assert llm._retry_after_seconds("try again in 9999s") == 60.0
+
+
+# ── JSON mode ─────────────────────────────────────────────────────────────────
+
+def test_json_mode_is_requested_for_supported_models(monkeypatch):
+    captured = {}
+
+    class _FakeCompletions:
+        def create(self, **kwargs):
+            captured.update(kwargs)
+
+            class _M: content = '{"ok": true}'
+            class _C: message = _M()
+            class _R: choices = [_C()]
+            return _R()
+
+    class _FakeGroq:
+        chat = type("chat", (), {"completions": _FakeCompletions()})()
+
+    monkeypatch.setattr(llm.config, "get_groq", lambda: _FakeGroq())
+
+    assert llm.call_groq("prompt", model="llama-3.3-70b-versatile") == {"ok": True}
+    assert captured["response_format"] == {"type": "json_object"}
+
+    captured.clear()
+    assert llm.call_groq("prompt", model="some-other-model") == {"ok": True}
+    assert "response_format" not in captured, "unknown models must not get JSON mode"
+
+
+def test_json_mode_can_be_disabled(monkeypatch):
+    monkeypatch.setattr(llm, "USE_JSON_MODE", False)
+    assert llm.supports_json_mode("llama-3.3-70b-versatile") is False
