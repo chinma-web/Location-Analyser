@@ -1,6 +1,5 @@
 import streamlit as st
 import os, json, time, re
-from html import escape as _html_escape
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -9,18 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import location as loc_engine
-
-
-def esc(value) -> str:
-    """
-    Escape anything before it is interpolated into an `unsafe_allow_html` block.
-
-    Review text, place names and LLM output are all untrusted here: a review
-    containing `<img src=x onerror=...>` would otherwise execute in the session.
-    """
-    if value is None:
-        return ""
-    return _html_escape(str(value), quote=True)
+from ui_utils import esc   # HTML-escape helper for unsafe_allow_html blocks
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -311,9 +299,9 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
     m2 = model_info.get("model_2", model_info.get("model_b", {}))
     m3 = model_info.get("model_3", model_info.get("verdict_model", {}))
     
-    m1_desc = f"{m1.get('provider','Groq')} / {m1.get('sentiment_model', m1.get('model', os.getenv('STRONG_MODEL','llama-3.3-70b-versatile')))}"
-    m2_desc = f"{m2.get('provider','Groq')} / {m2.get('model', os.getenv('VERIFIER_MODEL','llama-3.1-8b-instant'))}"
-    m3_desc = f"{m3.get('provider','Groq')} / {m3.get('model', os.getenv('VERDICT_MODEL','llama-3.3-70b-versatile'))}"
+    m1_desc = esc(f"{m1.get('provider','Groq')} / {m1.get('sentiment_model', m1.get('model', os.getenv('STRONG_MODEL','llama-3.3-70b-versatile')))}")
+    m2_desc = esc(f"{m2.get('provider','Groq')} / {m2.get('model', os.getenv('VERIFIER_MODEL','llama-3.1-8b-instant'))}")
+    m3_desc = esc(f"{m3.get('provider','Groq')} / {m3.get('model', os.getenv('VERDICT_MODEL','llama-3.3-70b-versatile'))}")
 
     st.markdown(
         f'<div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;'
@@ -395,8 +383,8 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
 
     st.markdown(
         f'<div class="verdict-box {v_class}">'
-        f'<div class="verdict-title">{v_icon_v} {rec_label}</div>'
-        f'<div class="verdict-quote">"{rec.get("one_line_verdict","Solid location based on review synthesis.")}"</div>'
+        f'<div class="verdict-title">{v_icon_v} {esc(rec_label)}</div>'
+        f'<div class="verdict-quote">"{esc(rec.get("one_line_verdict","Solid location based on review synthesis."))}"</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -430,13 +418,13 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
     place_icon = next((icon for kw, icon in CAT_ICONS.items() if kw in cat_lower), "📍")
 
     tag_list    = [s for s in subtypes if s.lower() != category.lower()][:6]
-    tags_html   = "".join(f'<span class="place-type-tag">{t}</span>' for t in tag_list)
+    tags_html   = "".join(f'<span class="place-type-tag">{esc(t)}</span>' for t in tag_list)
     closed_badge = (
         '<span class="place-type-closed">🔴 PERMANENTLY CLOSED</span>' if perm_closed else
         '<span class="place-type-closed">🟡 TEMPORARILY CLOSED</span>'  if temp_closed else ""
     )
-    meta_parts  = ([f"💰 {price}"] if price else []) + ([f"📞 {place_info['phone']}"] if place_info.get("phone") else [])
-    desc_html     = f'<div class="place-type-meta" style="color:#cbd5e1;font-size:0.9rem;margin-bottom:0.3rem;">{desc[:160]}{"…" if len(desc)>160 else ""}</div>' if desc else ""
+    meta_parts  = ([f"💰 {esc(price)}"] if price else []) + ([f"📞 {esc(place_info['phone'])}"] if place_info.get("phone") else [])
+    desc_html     = f'<div class="place-type-meta" style="color:#cbd5e1;font-size:0.9rem;margin-bottom:0.3rem;">{esc(desc[:160])}{"…" if len(desc)>160 else ""}</div>' if desc else ""
     subtypes_html = f'<div class="place-type-subtypes">{tags_html}</div>' if tag_list else ""
     meta_html     = f'<div class="place-type-meta">{"  ·  ".join(meta_parts)}</div>' if meta_parts else ""
 
@@ -444,8 +432,8 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
         f'<div class="place-type-card">'
         f'<div class="place-type-icon">{place_icon}</div>'
         f'<div class="place-type-body">'
-        f'<div class="place-type-name">{place_info.get("name", search_query)} {closed_badge}</div>'
-        f'<div class="place-type-category">{category or "Place"}</div>'
+        f'<div class="place-type-name">{esc(place_info.get("name", search_query))} {closed_badge}</div>'
+        f'<div class="place-type-category">{esc(category or "Place")}</div>'
         f'{desc_html}{subtypes_html}{meta_html}'
         f'</div></div>',
         unsafe_allow_html=True,
@@ -491,8 +479,8 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
                 pt = p.get("point") or p.get("text") or str(p) if isinstance(p, dict) else str(p)
                 wt = p.get("weight", "") if isinstance(p, dict) else ""
                 st.markdown(
-                    f'<div class="pro-card">✓ <b>{pt}</b>'
-                    + (f' <code>[{wt}]</code>' if wt else "") + "</div>",
+                    f'<div class="pro-card">✓ <b>{esc(pt)}</b>'
+                    + (f' <code>[{esc(wt)}]</code>' if wt else "") + "</div>",
                     unsafe_allow_html=True,
                 )
             if not rec.get("pros"):
@@ -504,8 +492,8 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
                 ct = c.get("point") or c.get("text") or str(c) if isinstance(c, dict) else str(c)
                 wt = c.get("weight", "") if isinstance(c, dict) else ""
                 st.markdown(
-                    f'<div class="con-card">✗ <b>{ct}</b>'
-                    + (f' <code>[{wt}]</code>' if wt else "") + "</div>",
+                    f'<div class="con-card">✗ <b>{esc(ct)}</b>'
+                    + (f' <code>[{esc(wt)}]</code>' if wt else "") + "</div>",
                     unsafe_allow_html=True,
                 )
             if not rec.get("cons"):
@@ -561,10 +549,10 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
             qc1, qc2 = st.columns(2)
             with qc1:
                 if sq_pos:
-                    st.markdown(f'<div class="pro-card">🌟 <i>"{sq_pos}"</i></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="pro-card">🌟 <i>"{esc(sq_pos)}"</i></div>', unsafe_allow_html=True)
             with qc2:
                 if sq_neg:
-                    st.markdown(f'<div class="con-card">⚠️ <i>"{sq_neg}"</i></div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="con-card">⚠️ <i>"{esc(sq_neg)}"</i></div>', unsafe_allow_html=True)
 
         # Positive / Negative points with evidence IDs
         pp_col, np_col = st.columns(2)
@@ -573,9 +561,9 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
             for pp in sentiment.get("positive_points", []):
                 if isinstance(pp, dict):
                     ids = pp.get("evidence_review_ids", [])
-                    ids_str = f' <span style="color:#64748b;font-size:0.75rem;">({", ".join(ids)})</span>' if ids else ""
+                    ids_str = f' <span style="color:#64748b;font-size:0.75rem;">({esc(", ".join(str(i) for i in ids))})</span>' if ids else ""
                     st.markdown(
-                        f'<div class="pro-card">✓ {pp.get("claim","")}{ids_str}</div>',
+                        f'<div class="pro-card">✓ {esc(pp.get("claim",""))}{ids_str}</div>',
                         unsafe_allow_html=True,
                     )
         with np_col:
@@ -583,9 +571,9 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
             for np_ in sentiment.get("negative_points", []):
                 if isinstance(np_, dict):
                     ids = np_.get("evidence_review_ids", [])
-                    ids_str = f' <span style="color:#64748b;font-size:0.75rem;">({", ".join(ids)})</span>' if ids else ""
+                    ids_str = f' <span style="color:#64748b;font-size:0.75rem;">({esc(", ".join(str(i) for i in ids))})</span>' if ids else ""
                     st.markdown(
-                        f'<div class="con-card">✗ {np_.get("claim","")}{ids_str}</div>',
+                        f'<div class="con-card">✗ {esc(np_.get("claim",""))}{ids_str}</div>',
                         unsafe_allow_html=True,
                     )
 
@@ -657,15 +645,15 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
             for label, sc, cnt, summ, ids in asp_rows:
                 color = "#22c55e" if sc >= 7 else "#f59e0b" if sc >= 5 else "#ef4444"
                 bar_w = int(sc * 10)
-                ids_str = f'<span style="color:#64748b;font-size:0.72rem;"> · {", ".join(ids)}</span>' if ids else ""
+                ids_str = f'<span style="color:#64748b;font-size:0.72rem;"> · {esc(", ".join(str(i) for i in ids))}</span>' if ids else ""
                 st.markdown(
                     f'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">'
-                    f'<span style="width:110px;font-size:0.85rem;color:#94a3b8;">{label}</span>'
+                    f'<span style="width:110px;font-size:0.85rem;color:#94a3b8;">{esc(label)}</span>'
                     f'<div style="flex:1;background:#1e293b;border-radius:4px;height:14px;">'
                     f'<div style="width:{bar_w}%;background:{color};height:14px;border-radius:4px;"></div></div>'
                     f'<span style="width:32px;text-align:right;font-weight:700;color:{color};font-size:0.9rem;">{sc:.1f}</span>'
                     f'<span style="font-size:0.75rem;color:#64748b;width:80px;">({cnt} reviews)</span>'
-                    f'<span style="font-size:0.8rem;color:#cbd5e1;flex:2;">{summ}{ids_str}</span>'
+                    f'<span style="font-size:0.8rem;color:#cbd5e1;flex:2;">{esc(summ)}{ids_str}</span>'
                     f'</div>',
                     unsafe_allow_html=True,
                 )
@@ -704,15 +692,15 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
                 t_sent  = t.get("sentiment","Neutral")
                 t_color = "#22c55e" if "Pos" in t_sent else "#ef4444" if "Neg" in t_sent else "#f59e0b"
                 t_ids   = t.get("evidence_review_ids",[])
-                t_ids_str = f' <span style="color:#64748b;font-size:0.72rem;">({", ".join(t_ids)})</span>' if t_ids else ""
+                t_ids_str = f' <span style="color:#64748b;font-size:0.72rem;">({esc(", ".join(str(i) for i in t_ids))})</span>' if t_ids else ""
                 st.markdown(
                     f'<div style="border-left:4px solid {t_color};padding:0.6rem 1rem;'
                     f'background:#1e293b;border-radius:0 6px 6px 0;margin-bottom:8px;">'
-                    f'<b style="color:{t_color};">{t.get("name","")}</b>'
+                    f'<b style="color:{t_color};">{esc(t.get("name",""))}</b>'
                     f'<span style="font-size:0.75rem;color:#64748b;margin-left:8px;">'
-                    f'{t_sent} · {t.get("frequency",0)} mentions{t_ids_str}</span><br>'
-                    f'<span style="color:#cbd5e1;font-size:0.85rem;">{t.get("evidence","")}</span>'
-                    + (f'<br><i style="color:#94a3b8;font-size:0.8rem;">"{t["representative_quote"]}"</i>' if t.get("representative_quote") else "")
+                    f'{esc(t_sent)} · {esc(t.get("frequency",0))} mentions{t_ids_str}</span><br>'
+                    f'<span style="color:#cbd5e1;font-size:0.85rem;">{esc(t.get("evidence",""))}</span>'
+                    + (f'<br><i style="color:#94a3b8;font-size:0.8rem;">"{esc(t["representative_quote"])}"</i>' if t.get("representative_quote") else "")
                     + "</div>",
                     unsafe_allow_html=True,
                 )
@@ -723,12 +711,12 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
             st.subheader("👍 Positive Keywords")
             pos_kws = sentiment.get("positive_keywords", [])
             if pos_kws:
-                st.markdown("".join(f'<span class="tag-pill tag-pos">👍 {kw}</span>' for kw in pos_kws), unsafe_allow_html=True)
+                st.markdown("".join(f'<span class="tag-pill tag-pos">👍 {esc(kw)}</span>' for kw in pos_kws), unsafe_allow_html=True)
         with kc2:
             st.subheader("👎 Negative Keywords")
             neg_kws = sentiment.get("negative_keywords", [])
             if neg_kws:
-                st.markdown("".join(f'<span class="tag-pill tag-neg">👎 {kw}</span>' for kw in neg_kws), unsafe_allow_html=True)
+                st.markdown("".join(f'<span class="tag-pill tag-neg">👎 {esc(kw)}</span>' for kw in neg_kws), unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════
     # TAB 3 — Guardrail & Authenticity
@@ -768,8 +756,8 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
                     col_c = "#ef4444" if "Detected" in str(val) or "Consistent" in str(val) else "#22c55e"
                     st.markdown(
                         f'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1e293b;">'
-                        f'<span style="color:#94a3b8;font-size:0.85rem;">{label}</span>'
-                        f'<span style="color:{col_c};font-size:0.85rem;font-weight:600;">{val}</span></div>',
+                        f'<span style="color:#94a3b8;font-size:0.85rem;">{esc(label)}</span>'
+                        f'<span style="color:{col_c};font-size:0.85rem;font-weight:600;">{esc(val)}</span></div>',
                         unsafe_allow_html=True,
                     )
                 if la.get("copy_paste_evidence"):
@@ -804,11 +792,11 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
             with rbc1:
                 risk  = rb.get("sock_puppet_risk","—")
                 color = {"Low":"#22c55e","Medium":"#f59e0b","High":"#ef4444"}.get(risk,"#94a3b8")
-                st.markdown(f'<b>Sock-puppet risk:</b> <span style="color:{color};font-weight:700;">{risk}</span>', unsafe_allow_html=True)
+                st.markdown(f'<b>Sock-puppet risk:</b> <span style="color:{color};font-weight:700;">{esc(risk)}</span>', unsafe_allow_html=True)
             with rbc2:
                 risk2  = rb.get("coordinated_posting_risk","—")
                 color2 = {"Low":"#22c55e","Medium":"#f59e0b","High":"#ef4444"}.get(risk2,"#94a3b8")
-                st.markdown(f'<b>Coordinated posting:</b> <span style="color:{color2};font-weight:700;">{risk2}</span>', unsafe_allow_html=True)
+                st.markdown(f'<b>Coordinated posting:</b> <span style="color:{color2};font-weight:700;">{esc(risk2)}</span>', unsafe_allow_html=True)
             if rb.get("evidence"):
                 st.caption(f"Evidence: {rb['evidence']}")
 
@@ -822,8 +810,8 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
                 if not isinstance(c, dict): continue
                 with st.expander(f"⚖️ **{c.get('aspect','Aspect')}**", expanded=False):
                     cc1, cc2 = st.columns(2)
-                    with cc1: st.markdown(f'<div class="pro-card">👍 {c.get("positive_claim","—")}</div>', unsafe_allow_html=True)
-                    with cc2: st.markdown(f'<div class="con-card">👎 {c.get("negative_claim","—")}</div>', unsafe_allow_html=True)
+                    with cc1: st.markdown(f'<div class="pro-card">👍 {esc(c.get("positive_claim","—"))}</div>', unsafe_allow_html=True)
+                    with cc2: st.markdown(f'<div class="con-card">👎 {esc(c.get("negative_claim","—"))}</div>', unsafe_allow_html=True)
                     st.info(f"🔍 Resolution: {c.get('resolution','—')}")
 
         # Per-aspect credibility
@@ -918,7 +906,7 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
             st.markdown(
                 f'<div style="background:#1e293b;border-left:4px solid #38bdf8;'
                 f'padding:0.6rem 1rem;border-radius:0 6px 6px 0;margin-bottom:6px;color:#e2e8f0;">'
-                f'💡 {tip}</div>',
+                f'💡 {esc(tip)}</div>',
                 unsafe_allow_html=True,
             )
 
@@ -1042,10 +1030,10 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
                         ca, cb = st.columns(2)
                         with ca:
                             st.markdown("**Original (Model A):**")
-                            st.markdown(f'<div class="con-card">{corr.get("original_claim","—")}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="con-card">{esc(corr.get("original_claim","—"))}</div>', unsafe_allow_html=True)
                         with cb:
                             st.markdown("**Corrected (Model B):**")
-                            st.markdown(f'<div class="pro-card">{corr.get("corrected_claim","—")}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="pro-card">{esc(corr.get("corrected_claim","—"))}</div>', unsafe_allow_html=True)
                         st.caption(f"**Reason:** {corr.get('reason','—')}")
                         ids = corr.get("evidence_review_ids", [])
                         if ids:
@@ -1065,11 +1053,11 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
                 with mp_col:
                     st.markdown("**Missed Positive Signals**")
                     for item in miss_pos:
-                        st.markdown(f'<div class="pro-card">+ {item}</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="pro-card">+ {esc(item)}</div>', unsafe_allow_html=True)
                 with mn_col:
                     st.markdown("**Missed Negative Signals**")
                     for item in miss_neg:
-                        st.markdown(f'<div class="con-card">- {item}</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="con-card">- {esc(item)}</div>', unsafe_allow_html=True)
 
             if verification.get("verification_notes"):
                 st.divider()
