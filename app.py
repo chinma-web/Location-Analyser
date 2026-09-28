@@ -12,6 +12,7 @@ load_dotenv()
 
 import locan as loc_engine
 from locan.aspects import aspect_set_for_place
+from locan.compare import MAX_PLACES, MIN_PLACES, compare_locations, validate_locations
 from locan.ui import esc  # HTML-escape helper for unsafe_allow_html blocks
 
 # Library logs go to the server's stderr with markup stripped, not raw Rich
@@ -119,13 +120,13 @@ st.divider()
 for _k, _v in {
     "city_val": "", "city_sugg": [], "confirmed_city": "",
     "loc_val": "", "loc_sugg": [], "confirmed_location": "",
-    "maps_url": "", "search_mode": "name",
+    "maps_url": "", "search_mode": "name", "compare_data": None,
 }.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
 
 # ── Search mode toggle ────────────────────────────────────────────────────────
-_mc1, _mc2 = st.columns(2)
+_mc1, _mc2, _mc3 = st.columns(3)
 with _mc1:
     if st.button("🔤 Search by Name", use_container_width=True,
                  type="primary" if st.session_state["search_mode"] == "name" else "secondary"):
@@ -134,6 +135,10 @@ with _mc2:
     if st.button("🔗 Paste Google Maps URL", use_container_width=True,
                  type="primary" if st.session_state["search_mode"] == "url" else "secondary"):
         st.session_state["search_mode"] = "url"
+with _mc3:
+    if st.button("⚖️ Compare places", use_container_width=True,
+                 type="primary" if st.session_state["search_mode"] == "compare" else "secondary"):
+        st.session_state["search_mode"] = "compare"
 
 st.markdown("")
 
@@ -228,9 +233,145 @@ else:
         st.warning("⚠️ That doesn't look like a valid URL.")
     search_query = maps_url.strip()
 
+# ════════════════════════════════════════════════════════
+# MODE C — Compare 2–4 places
+# ════════════════════════════════════════════════════════
+if st.session_state["search_mode"] == "compare":
+    st.markdown("Enter **2–4 places** (names or Google Maps URLs). Each one runs the "
+                "full pipeline; cached reports are reused, so repeat comparisons are quick.")
+    cmp_cols = st.columns(2)
+    compare_inputs = []
+    for slot in range(MAX_PLACES):
+        with cmp_cols[slot % 2]:
+            compare_inputs.append(st.text_input(
+                f"Place {slot + 1}" + ("" if slot < MIN_PLACES else " (optional)"),
+                key=f"cmp_{slot}",
+                placeholder="e.g. Cafe Goodluck, Pune",
+            ))
+    compare_btn = st.button("⚖️ Compare", type="primary")
+    search_query = ""
+else:
+    compare_inputs, compare_btn = [], False
+
 col_btn, col_blank = st.columns([1, 4])
 with col_btn:
-    analyze_btn = st.button("🚀 Analyze Location", type="primary", use_container_width=True)
+    if st.session_state["search_mode"] == "compare":
+        analyze_btn = False
+    else:
+        analyze_btn = st.button("🚀 Analyze Location", type="primary", use_container_width=True)
+
+# ── Compare execution ─────────────────────────────────────────────────────────
+if compare_btn:
+    try:
+        targets = validate_locations(compare_inputs)
+    except ValueError as exc:
+        targets = []
+        st.warning(f"⚠️ {exc}")
+
+    if targets and (not apify_key or not groq_key):
+        st.error("❌ Cannot start. Missing APIFY_API_TOKEN or GROQ_API_KEY in `.env`.")
+    elif targets:
+        cmp_progress = st.progress(0)
+        cmp_status = st.empty()
+
+        def _cmp_progress(index, total, location):
+            cmp_progress.progress(int(index / total * 100))
+            cmp_status.markdown(f"**Analysing {index + 1}/{total}:** {location}")
+
+        try:
+            st.session_state["compare_data"] = compare_locations(
+                targets, max_reviews=max_reviews,
+                force_refresh=force_refresh, progress_callback=_cmp_progress,
+            )
+            cmp_progress.progress(100)
+            cmp_status.success("✅ Comparison complete")
+            st.session_state["report_data"] = None
+        except Exception as exc:                       # noqa: BLE001
+            st.error(f"❌ Comparison failed: {exc}")
+
+# ── Comparison dashboard ──────────────────────────────────────────────────────
+if st.session_state.get("compare_data") and st.session_state["search_mode"] == "compare":
+    cmp = st.session_state["compare_data"]
+    entries = [e for e in cmp["entries"] if not e["error"]]
+
+    st.divider()
+    if cmp["winner"]:
+        st.success(f"🏆 **{esc(cmp['winner'])}** — {esc(cmp['headline'])}")
+    else:
+        st.info(f"🤝 {esc(cmp['headline'])}")
+
+    for caveat in cmp["caveats"]:
+        st.warning("⚠️ " + esc(caveat))
+
+    if entries:
+        st.subheader("📊 Side by side")
+        st.dataframe(
+            pd.DataFrame([{
+                "Place": e["name"],
+                "Score": e["score"],
+                "Verdict": e["verdict"],
+                "Data sufficiency": f"{e['confidence']:.0%}",
+                "Trust": f"{e['trust']:.0%}" if isinstance(e["trust"], (int, float)) else "—",
+                "Google": e["google_rating"] or "—",
+                "Reviews": e["reviews_analyzed"],
+                "Verified": e["verification_status"],
+            } for e in sorted(entries, key=lambda x: -(x["score"] or 0))]),
+            use_container_width=True, hide_index=True,
+        )
+
+        fig_cmp = px.bar(
+            pd.DataFrame([{"Place": e["name"], "Score": e["score"]} for e in entries]),
+            x="Place", y="Score", text_auto=True, range_y=[0, 10],
+            color="Score", color_continuous_scale=["#ef4444", "#f59e0b", "#22c55e"],
+        )
+        fig_cmp.update_layout(showlegend=False, coloraxis_showscale=False, height=300,
+                              margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(fig_cmp, use_container_width=True)
+
+        matrix = cmp["aspect_matrix"]
+        shared = {a: scores for a, scores in matrix.items() if len(scores) > 1}
+        if shared:
+            st.subheader("🔬 Aspect by aspect")
+            st.caption("Only aspects scored for more than one place. A blank cell means "
+                       "the aspect was never scored there — it is not a zero.")
+            fig_radar_cmp = go.Figure()
+            names = [e["name"] for e in entries]
+            labels = list(shared.keys())
+            for name in names:
+                values = [shared[a].get(name) for a in labels]
+                if all(v is None for v in values):
+                    continue
+                plotted = [v if v is not None else 0 for v in values]
+                fig_radar_cmp.add_trace(go.Scatterpolar(
+                    r=plotted + [plotted[0]],
+                    theta=[a.replace("_", " ").title() for a in labels + [labels[0]]],
+                    fill="toself", name=name, opacity=0.55,
+                ))
+            fig_radar_cmp.update_layout(
+                polar=dict(radialaxis=dict(range=[0, 10])), height=380,
+                margin=dict(l=40, r=40, t=20, b=20),
+            )
+            st.plotly_chart(fig_radar_cmp, use_container_width=True)
+
+            wins = cmp["aspect_winners"]
+            rows = []
+            for aspect, scores in shared.items():
+                row = {"Aspect": aspect.replace("_", " ").title()}
+                row.update({name: scores.get(name) for name in names})
+                win = wins.get(aspect, {})
+                row["Best"] = win.get("winner") or "tie"
+                rows.append(row)
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+    failed = [e for e in cmp["entries"] if e["error"]]
+    for entry in failed:
+        st.error(f"❌ {esc(entry['location'])}: {esc(entry['error'])}")
+
+    st.download_button(
+        "⬇️ Download comparison (JSON)",
+        data=json.dumps({k: v for k, v in cmp.items() if k != "reports"}, indent=2, default=str),
+        file_name="comparison.json", mime="application/json",
+    )
 
 # ── Execution Pipeline ────────────────────────────────────────────────────────
 if analyze_btn:
@@ -289,7 +430,8 @@ if analyze_btn:
                 st.error(f"❌ Analysis failed: {e}")
 
 # ── Results Dashboard ─────────────────────────────────────────────────────────
-if "report_data" in st.session_state and st.session_state["report_data"]:
+if (st.session_state.get("report_data")
+        and st.session_state["search_mode"] != "compare"):
     data = st.session_state["report_data"]
 
     place_info   = data.get("place_info", {})
