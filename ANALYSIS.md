@@ -153,12 +153,16 @@ So `r17` means three different reviews depending on which stage produced it, and
 
 _26 tests now cover these fixes and run without API keys: `pytest tests/`._
 
-### P1 — Confidence (makes it maintainable)
-6. `pytest` suite for `scoring.py`, `_clean_reviews`, `_heuristic_checks`, `_merge_sentiment_batches`, JSON repair — with recorded fixture payloads so tests need no API keys.
-7. Extract `ScoringConfig` dataclass; document weights; de-duplicate the sentiment triple-count.
-8. `ruff` + `mypy` + GitHub Actions CI; pin deps in `pyproject.toml`.
-9. Replace Rich prints in library code with `logging`.
-10. README with architecture diagram, setup, cost expectations, and a sample report.
+### P1 — Confidence (makes it maintainable) — ✅ **DONE**
+6. ✅ `pytest` suite for `scoring.py`, `_clean_reviews`, `_heuristic_checks`, `_merge_sentiment_batches`, JSON repair — no API keys needed. — `d1b84ca`, `d362a3e`
+7. ✅ Extract `ScoringConfig` dataclass; document weights; de-duplicate the sentiment triple-count. — `d1b84ca`
+8. ✅ `ruff` + GitHub Actions CI; dependency bounds in `pyproject.toml`. — `781a0ee`
+9. ✅ Replace Rich prints in library code with `logging`. — `5f2bcd4`
+10. ✅ README with architecture diagram, setup, configuration, and caveats.
+
+_Two further bugs surfaced while writing the tests and were fixed: the consistency
+component could never drop below 5.5/10 (wrong std-dev scale), and polarised review
+batches were labelled "Neutral" instead of "Mixed"._
 
 ### P2 — Speed & polish
 11. Parallel batch analysis + token-bucket rate limiter + `response_format=json_object`.
