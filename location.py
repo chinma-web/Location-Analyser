@@ -7,17 +7,25 @@ Two-Model Architecture:
 Final recommendation: deterministic Python scoring only.
 """
 
-import os, json, time, sys, re, hashlib, logging
-import urllib.request
+import hashlib
+import json
+import logging
+import os
+import re
+import sys
+import time
 import urllib.parse
+import urllib.request
 from collections import Counter
+
 from dotenv import load_dotenv
 
-from scoring import (                      # deterministic scoring engine
+from scoring import (  # deterministic scoring engine
     DEFAULT_CONFIG as DEFAULT_SCORING_CONFIG,
+)
+from scoring import (
     ScoringConfig,
     score_location,
-    verdict_for,
 )
 
 load_dotenv()
@@ -34,7 +42,7 @@ except ImportError:
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-APIFY_TOKEN  = os.getenv("APIFY_API_TOKEN") or os.getenv("APify_API_TOKEN", "")
+APIFY_TOKEN  = os.getenv("APIFY_API_TOKEN") or os.getenv("APIFY_API_TOKEN".lower(), "")  # legacy lowercase alias
 GROQ_KEY     = os.getenv("GROQ_API_KEY", "")
 
 # Model B — Groq llama-3.1-8b-instant (independent verification, proven reliable)
@@ -234,7 +242,7 @@ def read_cache(location: str, max_reviews: int):
     if not os.path.exists(path):
         return None
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except Exception as e:
         log(f"[yellow]⚠ Cache read failed ({e}) — re-running pipeline.[/yellow]")
@@ -396,7 +404,7 @@ def call_verifier(system_prompt: str, user_prompt: str, max_tokens: int = 1500) 
         )
         raw = (response.choices[0].message.content or "").strip()
     except Exception as e:
-        raise RuntimeError(f"Groq verifier call failed: {e}")
+        raise RuntimeError(f"Groq verifier call failed: {e}") from e
 
     if not raw:
         raise RuntimeError("Verifier returned empty content.")
@@ -412,7 +420,9 @@ def call_verifier(system_prompt: str, user_prompt: str, max_tokens: int = 1500) 
                 return json.loads(raw[start:end+1])
             except json.JSONDecodeError:
                 pass
-        raise RuntimeError(f"Verifier response is not valid JSON. Raw (first 400): {raw[:400]}")
+        raise RuntimeError(
+            f"Verifier response is not valid JSON. Raw (first 400): {raw[:400]}"
+        ) from None
 
 
 # ── Geocoder helpers (Photon / komoot) ───────────────────────────────────────
@@ -645,7 +655,6 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
             "includeOpeningHours": True,
         }
     else:
-        parts       = location.strip().split(",", 1)
         place_query = location.strip()
         sugg        = get_place_suggestions(place_query, city="", limit=1)
 
@@ -752,7 +761,7 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
 
     except Exception as e:
         log(f"[red]✗  Apify scraping failed: {e}[/red]")
-        raise RuntimeError(f"Unable to collect reviews right now. Apify error: {e}")
+        raise RuntimeError(f"Unable to collect reviews right now. Apify error: {e}") from e
 
 
 def _empty_review_stats() -> dict:
@@ -1608,7 +1617,9 @@ def _unavailable_verification(reason: str) -> dict:
     that crashed, timed out, or was never configured still rendered as a green
     92%-accurate independent audit, and made REQUIRE_VERIFICATION unreachable.
     """
-    blank = lambda: {"status": "UNCHECKED", "observations": [], "issues": []}
+    def blank():
+        return {"status": "UNCHECKED", "observations": [], "issues": []}
+
     return {
         "verification_status":    "UNAVAILABLE",
         "status":                 "UNAVAILABLE",
@@ -1874,7 +1885,7 @@ Return EXACTLY this JSON (use the provided verdict and visit_score as-is):
         "composite":       score,
     }
 
-    log(f"[green]✓  Explanation generated.[/green]")
+    log("[green]✓  Explanation generated.[/green]")
     return result
 
 
@@ -2003,7 +2014,7 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
 
     # ── Stage 1: Scrape ──
     if progress_callback:
-        progress_callback(1, "Scraping Reviews", f"Collecting Google Maps reviews via Apify...")
+        progress_callback(1, "Scraping Reviews", "Collecting Google Maps reviews via Apify...")
     try:
         reviews, place_info, review_stats = scrape_reviews(location, max_reviews)
     except RuntimeError as e:

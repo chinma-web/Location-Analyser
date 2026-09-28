@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov ruff
+
+      - name: Lint
+        run: ruff check .
+
+      # No API keys are needed: the suite covers the pure logic only.
+      - name: Test
+        run: pytest --cov=scoring --cov=ui_utils --cov-report=term-missing
+
+      - name: Check the app imports without credentials
+        env:
+          APIFY_API_TOKEN: ""
+          GROQ_API_KEY: ""
+        run: |
+          python -c "import location, scoring, ui_utils; print(location.validate_config(raise_on_error=False))"

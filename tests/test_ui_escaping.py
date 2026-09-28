@@ -2,8 +2,6 @@
 import re
 from pathlib import Path
 
-import pytest
-
 from ui_utils import esc
 
 PAYLOAD = '<img src=x onerror="alert(1)">'

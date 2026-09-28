@@ -22,8 +22,8 @@ Two design rules:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Mapping, Optional
 
 # Statuses that represent a real, completed independent audit. Kept here (rather
 # than imported from location.py) so this module stays dependency-free.
@@ -112,7 +112,7 @@ DEFAULT_CONFIG = ScoringConfig()
 
 # ── Component calculations (each returns a 0-10 score, or None if no data) ────
 
-def sentiment_component(sentiment: dict) -> Optional[float]:
+def sentiment_component(sentiment: dict) -> float | None:
     """Map Model 1's -1..+1 sentiment score onto 0-10."""
     raw = sentiment.get("sentiment_score")
     if not isinstance(raw, (int, float)):
@@ -120,7 +120,7 @@ def sentiment_component(sentiment: dict) -> Optional[float]:
     return round((max(-1.0, min(1.0, raw)) + 1) / 2 * 10, 2)
 
 
-def aspect_component(sentiment: dict, cfg: ScoringConfig = DEFAULT_CONFIG) -> Optional[float]:
+def aspect_component(sentiment: dict, cfg: ScoringConfig = DEFAULT_CONFIG) -> float | None:
     """Weighted mean over aspects that were actually scored. None if none were."""
     asp_scores = sentiment.get("aspect_scores") or {}
     weighted_sum = weight_total = 0.0
@@ -135,7 +135,7 @@ def aspect_component(sentiment: dict, cfg: ScoringConfig = DEFAULT_CONFIG) -> Op
     return round(weighted_sum / weight_total, 2)
 
 
-def rating_component(place_info: dict, reviews: list) -> Optional[float]:
+def rating_component(place_info: dict, reviews: list) -> float | None:
     """Google's 5-star rating on a 0-10 scale, else the scraped sample mean."""
     google_score = place_info.get("google_score")
     if isinstance(google_score, (int, float)) and google_score > 0:
@@ -150,7 +150,7 @@ def trust_component(
     guardrail: dict,
     verification: dict,
     cfg: ScoringConfig = DEFAULT_CONFIG,
-) -> Optional[float]:
+) -> float | None:
     """
     Authenticity score, adjusted by how much independent verification happened.
 
@@ -181,7 +181,7 @@ def trust_component(
 def consistency_component(
     sentiment: dict,
     cfg: ScoringConfig = DEFAULT_CONFIG,
-) -> Optional[float]:
+) -> float | None:
     """
     How much reviewers agree with each other (low dispersion → high score).
 
@@ -202,7 +202,7 @@ def consistency_component(
 def recency_component(
     sentiment: dict,
     cfg: ScoringConfig = DEFAULT_CONFIG,
-) -> Optional[float]:
+) -> float | None:
     """
     Recent sentiment, adjusted by trend direction.
 

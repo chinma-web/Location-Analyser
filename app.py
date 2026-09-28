@@ -1,14 +1,17 @@
-import streamlit as st
-import os, json, time, re
+import json
+import os
+import time
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
 
 import location as loc_engine
-from ui_utils import esc   # HTML-escape helper for unsafe_allow_html blocks
+from ui_utils import esc  # HTML-escape helper for unsafe_allow_html blocks
 
 # Library logs go to the server's stderr with markup stripped, not raw Rich
 # panels dumped into stdout on every rerun.

@@ -4,7 +4,6 @@ Tests for the pure analysis helpers in location.py.
 These run with no API keys and no network: review cleaning, the heuristic
 fake-review pre-pass, batch merging, and the JSON-repair logic.
 """
-import json
 
 import pytest
 

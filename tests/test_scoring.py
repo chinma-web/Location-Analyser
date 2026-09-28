@@ -212,7 +212,9 @@ def test_config_is_honoured():
 
 
 def test_config_is_immutable():
-    with pytest.raises(Exception):
+    from dataclasses import FrozenInstanceError
+
+    with pytest.raises(FrozenInstanceError):
         DEFAULT_CONFIG.max_risk_penalty = 99
 
 

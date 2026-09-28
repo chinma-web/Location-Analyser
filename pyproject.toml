@@ -1,0 +1,72 @@
+[project]
+name = "location-analyser"
+version = "0.2.0"
+description = "Scrapes Google Maps reviews and turns them into an evidence-backed verdict, with a deterministic Python scoring engine and an independent LLM verifier."
+requires-python = ">=3.10"
+readme = "README.md"
+
+# Lower bounds are the versions the code is known to work against. They are
+# deliberately not pinned to exact versions here; use requirements.txt for a
+# reproducible install.
+dependencies = [
+    "apify-client>=1.7.0,<4",
+    "groq>=0.11.0,<2",
+    "python-dotenv>=1.0.0,<2",
+    "rich>=13.7.0,<16",
+    "streamlit>=1.30.0,<2",
+    "plotly>=5.18.0,<8",
+    "pandas>=2.0.0,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+]
+
+[project.scripts]
+location-analyser = "location:main"
+
+[tool.setuptools]
+py-modules = ["location", "scoring", "ui_utils"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = [".venv", "cache", "autocomplete_component"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # import sorting
+    "B",    # bugbear
+    "UP",   # pyupgrade
+    "C4",   # comprehensions
+    "SIM",  # simplify
+]
+ignore = [
+    "E501",    # long lines: the prompt templates are intentionally wide
+    "E741",    # ambiguous variable names in short numeric code
+    "SIM108",  # ternaries are not always clearer here
+    "B008",
+    "E701",    # `with col: st.metric(...)` is the idiomatic Streamlit layout style
+    "C408",    # plotly/pandas APIs read better with dict(...) kwargs
+    "B905",    # zip() without strict=: call sites zip equal-length sequences
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may shadow builtins and use bare asserts freely.
+"tests/*" = ["B011", "E402"]
+# Streamlit scripts run top-to-bottom; imports after st.set_page_config are normal.
+"app.py" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "preserve"
