@@ -7,6 +7,7 @@ Two-Model Architecture:
 Final recommendation: deterministic Python scoring only.
 """
 
+import functools
 import hashlib
 import json
 import logging
@@ -427,11 +428,36 @@ def call_verifier(system_prompt: str, user_prompt: str, max_tokens: int = 1500) 
 
 # ── Geocoder helpers (Photon / komoot) ───────────────────────────────────────
 
-def _photon_request(params: dict, timeout: int = 6) -> dict:
-    url = "https://photon.komoot.io/api/?" + urllib.parse.urlencode(params)
+# Autocomplete fires on every keystroke and the place lookup geocodes the city
+# again each time, so the same handful of queries hit Photon over and over.
+# Geocoding results are stable, so an in-process LRU is the right cache: it
+# survives Streamlit reruns (the module stays imported) and keeps us well inside
+# Komoot's fair-use policy.
+GEOCODE_CACHE_SIZE = 256
+
+
+@functools.lru_cache(maxsize=GEOCODE_CACHE_SIZE)
+def _photon_request_cached(params_items: tuple, timeout: int = 6) -> str:
+    """Cached transport layer. Returns the raw JSON body (hashable, immutable)."""
+    url = "https://photon.komoot.io/api/?" + urllib.parse.urlencode(dict(params_items))
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode())
+    with urllib.request.urlopen(req, timeout=timeout) as resp:   # noqa: S310 (fixed host)
+        return resp.read().decode()
+
+
+def _photon_request(params: dict, timeout: int = 6) -> dict:
+    # sorted() so equivalent queries share a cache entry regardless of key order
+    body = _photon_request_cached(tuple(sorted(params.items())), timeout)
+    return json.loads(body)
+
+
+def geocode_cache_info() -> str:
+    info = _photon_request_cached.cache_info()
+    return f"hits={info.hits} misses={info.misses} size={info.currsize}"
+
+
+def clear_geocode_cache() -> None:
+    _photon_request_cached.cache_clear()
 
 
 def geocode_city(city: str) -> tuple:
@@ -552,14 +578,37 @@ def get_city_suggestions(query: str, limit: int = 6) -> list:
 
 # ── URL expander ──────────────────────────────────────────────────────────────
 
+# Only these hosts are followed when expanding a shortened Maps link. Without an
+# allowlist the app will fetch any URL a user pastes, which is an SSRF vector if
+# this is ever deployed server-side.
+ALLOWED_MAPS_HOSTS = (
+    "google.com", "www.google.com", "maps.google.com",
+    "goo.gl", "maps.app.goo.gl", "g.co",
+)
+
+
+def _host_allowed(url: str) -> bool:
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    return any(host == allowed or host.endswith("." + allowed) for allowed in ALLOWED_MAPS_HOSTS)
+
+
 def expand_maps_url(url: str) -> str:
+    """Resolve a shortened Google Maps link to its final URL."""
+    if not _host_allowed(url):
+        log(f"[yellow]Refusing to expand non-Google host: {urllib.parse.urlparse(url).hostname}[/yellow]")
+        return url
     try:
+        # HEAD: we only want the redirect target, not the whole page body.
         req = urllib.request.Request(
             url,
+            method="HEAD",
             headers={"User-Agent": "Mozilla/5.0 (compatible; LocationAnalyzer/1.0)"},
         )
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=8) as resp:   # noqa: S310 (allowlisted host)
             final_url = resp.url
+        if not _host_allowed(final_url):
+            log("[yellow]Redirect left the allowlist — using the original URL[/yellow]")
+            return url
         log(f"[dim]🔗 Expanded URL: {final_url[:80]}…[/dim]")
         return final_url
     except Exception as e:
@@ -773,23 +822,57 @@ def _empty_review_stats() -> dict:
     }
 
 
+DUPLICATE_JACCARD_THRESHOLD = 0.70   # dedupe during cleaning
+NEAR_DUPLICATE_THRESHOLD    = 0.55   # softer threshold for the "suspicious" heuristic
+
+
+def _tokenise(text: str) -> frozenset:
+    """Lowercase word set used for all Jaccard comparisons."""
+    return frozenset(text.lower().split())
+
+
+def _jaccard(a: frozenset, b: frozenset) -> float:
+    if not a or not b:
+        return 0.0
+    intersection = len(a & b)
+    if intersection == 0:
+        return 0.0
+    return intersection / (len(a) + len(b) - intersection)
+
+
+def _similar(a: frozenset, b: frozenset, threshold: float) -> bool:
+    """
+    Jaccard similarity test with a cheap length-ratio pre-filter.
+
+    |A∩B| <= min(|A|,|B|), so J <= min/max. If the size ratio alone cannot reach
+    the threshold the pair is skipped before any set operation runs — reviews of
+    very different lengths are the common case.
+    """
+    if not a or not b:
+        return False
+    small, large = (len(a), len(b)) if len(a) < len(b) else (len(b), len(a))
+    if small / large <= threshold:
+        return False
+    return _jaccard(a, b) > threshold
+
+
 def _clean_reviews(reviews: list) -> list:
-    """Remove near-duplicate reviews (>70% Jaccard word overlap) and keep unique ones."""
+    """
+    Remove near-duplicate reviews (>70% Jaccard word overlap), keeping the first.
+
+    Still O(n²) in the worst case, but each review is tokenised exactly once
+    instead of once per comparison, and the length pre-filter rejects most pairs
+    before touching a set. Previously this re-split the same strings n²/2 times.
+    """
     if not reviews:
         return []
-    kept   = []
-    seen_texts = []
-    for r in reviews:
-        words_r = set(r["text"].lower().split())
-        is_dup  = False
-        for prev in seen_texts:
-            union = words_r | prev
-            if union and len(words_r & prev) / len(union) > 0.70:
-                is_dup = True
-                break
-        if not is_dup:
-            kept.append(r)
-            seen_texts.append(words_r)
+    kept, kept_tokens = [], []
+    for review in reviews:
+        tokens = _tokenise(review["text"])
+        if any(_similar(tokens, prev, DUPLICATE_JACCARD_THRESHOLD) for prev in kept_tokens):
+            continue
+        kept.append(review)
+        kept_tokens.append(tokens)
     return kept
 
 
@@ -1100,15 +1183,16 @@ def _heuristic_checks(reviews: list) -> dict:
     if n > 0 and len(short_5star) / n > 0.30:
         flags.append(f"{len(short_5star)} very short 5-star reviews (< 12 chars) — likely filler boosts")
 
-    duplicates = 0
-    check_n    = min(n, 30)
-    for i in range(check_n):
-        for j in range(i + 1, check_n):
-            w1 = set(texts[i].split())
-            w2 = set(texts[j].split())
-            union = w1 | w2
-            if union and len(w1 & w2) / len(union) > 0.55:
-                duplicates += 1
+    # Tokenise once per review, not once per comparison: the inner loop used to
+    # re-split both strings on every pair (~n²/2 redundant splits).
+    check_n   = min(n, 30)
+    token_sets = [_tokenise(t) for t in texts[:check_n]]
+    duplicates = sum(
+        1
+        for i in range(check_n)
+        for j in range(i + 1, check_n)
+        if _similar(token_sets[i], token_sets[j], NEAR_DUPLICATE_THRESHOLD)
+    )
     if duplicates >= 3:
         flags.append(f"{duplicates} near-duplicate review pairs (>55% word overlap)")
 
