@@ -180,11 +180,30 @@ batches were labelled "Neutral" instead of "Mixed"._
     console script, which pointed at a function that never existed.
 14. ✅ Delete dead code (`autocomplete_component/`, `streamlit-searchbox`) (`781a0ee`).
 
-### P3 — Product
-15. **Compare mode** (2–4 places side by side).
-16. Category-aware aspect sets.
-17. Extractive keyword grounding (counts, not vibes) + per-aspect review drill-down.
-18. Map view, run history, cost meter, PDF/Markdown export.
+### P3 — Product — ✅ DONE
+15. ✅ **Compare mode** (2–4 places side by side) (`6d2916a`). `locan/compare.py`
+    refuses to name a winner inside a 0.5-point gap, excludes places below 50%
+    data sufficiency from the winner call, keeps the aspect matrix sparse rather
+    than filling blanks with zeros, and surfaces caveats for uneven sample
+    sizes, mixed categories and incomplete verification.
+16. ✅ Category-aware aspect sets (`a2794fc`). Seven sets plus a generic
+    fallback, chosen by longest-substring match on the Google category; drives
+    the prompt schema, the merge keys, the scoring weights and the grounding
+    lexicon.
+17. ✅ Extractive keyword grounding + per-aspect drill-down (`8df844a`).
+    `locan/grounding.py` counts real occurrences: keywords split into grounded
+    (with review IDs) and ungrounded, terms ranked by document frequency, and
+    aspects scored without lexical support flagged. Surfaced in an Evidence tab
+    labelled "no model".
+18. ✅ Map view, run history, cost meter, Markdown/HTML export. `locan/usage.py`
+    records the token counts the provider actually reported (never a silent
+    estimate) and prices them per model; `locan/history.py` is a view over the
+    report cache, not a second store; `locan/export.py` emits Markdown, a
+    printable HTML document (browser → PDF, no PDF engine dependency) and JSON.
+    Coordinates are now scraped so the place renders on a map.
+
+_Also added in this pass: `tests/test_app_smoke.py`, which runs the real
+Streamlit script through `AppTest` — app.py was 1,200 untested lines._
 
 ---
 

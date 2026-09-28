@@ -12,6 +12,7 @@ from locan import config
 from locan.config import FAST_MODEL, STRONG_MODEL, VERIFIER_MODEL
 from locan.logging_utils import log
 from locan.ratelimit import limiter_for
+from locan.usage import record_response
 
 # Fallback wait (seconds) when Groq rate-limits us without a Retry-After hint.
 RATE_LIMIT_BACKOFF = float(os.getenv("RATE_LIMIT_BACKOFF", "5"))
@@ -65,6 +66,7 @@ def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> d
                 max_tokens=max_tokens,
                 **kwargs,
             )
+            record_response(model, res)
             raw = res.choices[0].message.content.strip()
 
             # Strip reasoning model thinking tags if present (e.g. DeepSeek R1)
@@ -125,6 +127,7 @@ def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> d
                         temperature=0.2,
                         max_tokens=max_tokens,
                     )
+                    record_response(STRONG_MODEL if model != STRONG_MODEL else FAST_MODEL, res)
                     raw = res.choices[0].message.content.strip()
                     if raw.startswith("```"):
                         parts = raw.split("```")
@@ -180,6 +183,7 @@ def call_verifier(system_prompt: str, user_prompt: str, max_tokens: int = 1500) 
             # but the parameter was never actually passed.
             response_format={"type": "json_object"},
         )
+        record_response(VERIFIER_MODEL, response)
         raw = (response.choices[0].message.content or "").strip()
     except Exception as e:
         raise RuntimeError(f"Groq verifier call failed: {e}") from e

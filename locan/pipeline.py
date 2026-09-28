@@ -26,6 +26,7 @@ from locan.scoring import DEFAULT_CONFIG as DEFAULT_SCORING_CONFIG
 from locan.scoring import ScoringConfig, score_location
 from locan.scraper import scrape_reviews
 from locan.sentiment import analyze_sentiment
+from locan.usage import METER, format_cost
 from locan.verify import verify_analysis
 
 # ── MODULE 6: Deterministic Python Scoring & Recommendation ──────────────────
@@ -209,6 +210,8 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
       7. Groq explanation — prose only, never overrides score
     """
     t0 = time.time()
+    # Cost accounting covers this run only.
+    METER.reset()
     # Rich panels are CLI presentation, not library behaviour: the Streamlit app
     # would otherwise dump them into the server's stdout on every run.
     if render_report:
@@ -324,7 +327,13 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
         )
 
     elapsed = time.time() - t0
-    log(f"\n[dim]⏱  Total time: {elapsed:.1f}s[/dim]")
+    usage_summary = METER.summary()
+    usage_summary["elapsed_seconds"] = round(elapsed, 1)
+    log(
+        f"\n[dim]⏱  Total time: {elapsed:.1f}s  ·  "
+        f"{usage_summary['total_tokens']:,} tokens over {usage_summary['calls']} calls  ·  "
+        f"~{format_cost(usage_summary['total_cost_usd'])}[/dim]"
+    )
 
     # Save full JSON
     payload  = {
@@ -346,6 +355,9 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None,
         # Full deterministic breakdown (which components were used, effective
         # weights, penalties) so the UI can show how the score was built.
         "scoring":        final_scoring,
+        # What this run actually cost, from the token counts the provider
+        # reported (see locan/usage.py).
+        "usage":          usage_summary,
         "model_info": {
             "three_model_pipeline": True,
             "model_1": {

@@ -171,6 +171,12 @@ ruff check .
 | `locan/pipeline.py` | `analyze()` — the end-to-end run |
 | `locan/report.py` | Rich terminal rendering (CLI only) |
 | `locan/cache.py` | on-disk report cache |
+| `locan/aspects.py` | category-aware aspect sets (hotel/gym/clinic/…) |
+| `locan/grounding.py` | extractive counting: keywords and aspects vs. real text |
+| `locan/compare.py` | side-by-side comparison of 2–4 places |
+| `locan/usage.py` | token and cost accounting |
+| `locan/history.py` | browsable run history over the report cache |
+| `locan/export.py` | Markdown / HTML / JSON export |
 | `locan/cli.py` | command-line entry point |
 | `locan/ui.py` | presentation helpers (HTML escaping) |
 | `location.py` | backwards-compatibility shim re-exporting `locan` |

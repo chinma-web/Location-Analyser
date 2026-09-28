@@ -151,3 +151,27 @@ def test_compare_mode_rejects_a_single_place():
     compare_button.click().run()
     assert app.exception == []
     assert any("2–4 distinct places" in w.value for w in app.warning)
+
+
+def test_history_export_and_cost_render(tmp_path, monkeypatch):
+    """Sidebar history, cost meter and the three download buttons."""
+    monkeypatch.setenv("CACHE_DIR", str(tmp_path))
+    report = _sample_report()
+    report["usage"] = {"total_cost_usd": 0.0031, "total_tokens": 41234, "calls": 7,
+                       "elapsed_seconds": 42.5, "any_estimated": True,
+                       "any_unpriced": False}
+    report["place_info"]["latitude"] = 18.52
+    report["place_info"]["longitude"] = 73.85
+
+    app = _app()
+    app.session_state["report_data"] = report
+    app.run()
+    assert app.exception == []
+
+    labels = [b.label for b in app.download_button]
+    assert "📥 JSON" in labels and "📝 Markdown" in labels
+    assert any("HTML" in label for label in labels)
+
+    metrics = {m.label: m.value for m in app.metric}
+    assert metrics["Run cost"] == "<$0.01 (0.31¢)"
+    assert metrics["Tokens"] == "41,234"

@@ -6,6 +6,7 @@ from locan.config import ACTOR_ID, get_apify
 from locan.geo import expand_maps_url, get_place_suggestions
 from locan.logging_utils import log
 from locan.reviews import _clean_reviews, assign_review_ids
+from locan.usage import METER
 
 # ── MODULE 1: Apify Scraper ───────────────────────────────────────────────────
 
@@ -79,6 +80,7 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
 
     try:
         run = get_apify().actor(ACTOR_ID).call(run_input=run_input)
+        METER.record_scrape()
         if isinstance(run, dict):
             dataset_id = run.get("defaultDatasetId") or run.get("default_dataset_id")
         else:
@@ -108,6 +110,8 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
             "website":            best.get("website") or "",
             "phone":              best.get("phone") or "",
             "location_type":      best.get("locationType") or "",
+            "latitude":           (best.get("location") or {}).get("lat"),
+            "longitude":          (best.get("location") or {}).get("lng"),
             "permanently_closed": best.get("permanentlyClosed") or False,
             "temporarily_closed": best.get("temporarilyClosed") or False,
         }

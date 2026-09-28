@@ -13,7 +13,10 @@ load_dotenv()
 import locan as loc_engine
 from locan.aspects import aspect_set_for_place
 from locan.compare import MAX_PLACES, MIN_PLACES, compare_locations, validate_locations
+from locan.export import suggested_filename, to_html, to_json, to_markdown
+from locan.history import delete_run, history_stats, list_runs, load_run
 from locan.ui import esc  # HTML-escape helper for unsafe_allow_html blocks
+from locan.usage import format_cost
 
 # Library logs go to the server's stderr with markup stripped, not raw Rich
 # panels dumped into stdout on every rerun.
@@ -110,6 +113,41 @@ with st.sidebar:
         help=f"Reports are cached for {loc_engine.CACHE_TTL_HOURS:.0f}h, keyed on the exact "
              f"query and review count. Tick this to re-scrape and re-analyse.",
     )
+
+    st.divider()
+    with st.expander("🕘 Run history"):
+        _runs = list_runs()
+        if not _runs:
+            st.caption("No past runs yet. Every analysis is cached here automatically.")
+        else:
+            _stats = history_stats(_runs)
+            st.caption(
+                f"{_stats['runs']} cached run(s) · "
+                f"{_stats['total_tokens']:,} tokens · "
+                f"{format_cost(_stats['total_cost_usd'])} spent"
+                + (f" · avg score {_stats['average_score']}" if _stats["average_score"] else "")
+            )
+            for _run in _runs[:15]:
+                _label = (f"{_run['name'] or _run['location']} · "
+                          f"{_run['score'] if _run['score'] is not None else '—'}/10 · "
+                          f"{_run['age_hours']:.0f}h ago")
+                _rc1, _rc2 = st.columns([4, 1])
+                with _rc1:
+                    if st.button(_label, key=f"hist_{_run['path']}", use_container_width=True):
+                        _loaded = load_run(_run["path"])
+                        if _loaded:
+                            st.session_state["report_data"] = _loaded
+                            st.session_state["search_mode"] = "name"
+                            st.rerun()
+                        else:
+                            st.warning("That run could not be loaded.")
+                with _rc2:
+                    if st.button("🗑", key=f"del_{_run['path']}", help="Delete this run"):
+                        delete_run(_run["path"])
+                        st.rerun()
+                if _run["stale"]:
+                    st.caption("   ↳ saved by an older version — re-run for the current schema")
+
 
 # ── Page title ────────────────────────────────────────────────────────────────
 st.markdown("## 📍 3-Model AI Location Review Analyzer")
@@ -614,6 +652,9 @@ if (st.session_state.get("report_data")
         with pm1:
             st.markdown(f"**Name:** {place_info.get('name', search_query)}")
             st.markdown(f"**Category:** {place_info.get('category') or 'N/A'}")
+            _lat, _lon = place_info.get("latitude"), place_info.get("longitude")
+            if isinstance(_lat, (int, float)) and isinstance(_lon, (int, float)):
+                st.map(pd.DataFrame([{"lat": _lat, "lon": _lon}]), size=40, zoom=14)
         with pm2:
             st.markdown(f"**Google Score:** ⭐ {place_info.get('google_score', 'N/A')} / 5")
             rc_cnt = place_info.get("review_count", "N/A")
@@ -658,6 +699,25 @@ if (st.session_state.get("report_data")
         with sv3:
             _pen = scoring_bd.get("risk_penalty", 0)
             st.metric("Risk Penalty", f"-{_pen}" if _pen else "none")
+
+        _usage = data.get("usage") or {}
+        if _usage:
+            cm1, cm2, cm3 = st.columns(3)
+            with cm1:
+                st.metric("Run cost", format_cost(_usage.get("total_cost_usd", 0)),
+                          help="Groq tokens at published per-model rates, plus the Apify "
+                               "per-place scrape charge. Cached re-runs cost nothing.")
+            with cm2:
+                st.metric("Tokens", f"{_usage.get('total_tokens', 0):,}",
+                          help=f"{_usage.get('calls', 0)} model calls")
+            with cm3:
+                st.metric("Wall clock", f"{_usage.get('elapsed_seconds', 0):.0f}s")
+            if _usage.get("any_estimated"):
+                st.caption("⚠️ Some token counts were estimated — the provider did not "
+                           "report usage for every call.")
+            if _usage.get("any_unpriced"):
+                st.caption("⚠️ One or more models are missing from the price table, so the "
+                           "cost shown is a lower bound.")
 
         _used    = scoring_bd.get("components_used") or []
         _missing = scoring_bd.get("components_missing") or []
@@ -1395,15 +1455,30 @@ if (st.session_state.get("report_data")
 
         st.divider()
         st.subheader("💾 Export Full Report")
-        json_str = json.dumps(data, indent=2, ensure_ascii=False, default=str)
-        loc_slug = "".join(
-            c if c.isalnum() or c in " _-" else ""
-            for c in (place_info.get("name") or search_query)
-        )[:40].strip().replace(" ", "_") or "report"
-        st.download_button(
-            label="📥 Download Full Report (.json)",
-            data=json_str,
-            file_name=f"report_{loc_slug}.json",
-            mime="application/json",
-            type="primary",
-        )
+        include_reviews = st.checkbox("Include full review text in the document", value=False)
+        ex1, ex2, ex3 = st.columns(3)
+        with ex1:
+            st.download_button(
+                "📥 JSON", data=to_json(data),
+                file_name=suggested_filename(data, "json"),
+                mime="application/json", use_container_width=True,
+            )
+        with ex2:
+            st.download_button(
+                "📝 Markdown", data=to_markdown(data, include_reviews=include_reviews),
+                file_name=suggested_filename(data, "md"),
+                mime="text/markdown", use_container_width=True, type="primary",
+            )
+        with ex3:
+            st.download_button(
+                "🖨️ HTML (print → PDF)",
+                data=to_html(data, include_reviews=include_reviews),
+                file_name=suggested_filename(data, "html"),
+                mime="text/html", use_container_width=True,
+            )
+        st.caption("The HTML file is styled for printing — open it and use your browser's "
+                   "Print → Save as PDF. A bundled PDF engine would add a heavy dependency "
+                   "for output the browser already renders correctly.")
+
+        with st.expander("📄 Preview the Markdown report"):
+            st.code(to_markdown(data, include_reviews=False), language="markdown")
