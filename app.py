@@ -95,6 +95,13 @@ with st.sidebar:
         min_value=10, max_value=100, value=30, step=5,
     )
 
+    force_refresh = st.checkbox(
+        "🔄 Force refresh (ignore cache)",
+        value=False,
+        help=f"Reports are cached for {loc_engine.CACHE_TTL_HOURS:.0f}h, keyed on the exact "
+             f"query and review count. Tick this to re-scrape and re-analyse.",
+    )
+
 # ── Page title ────────────────────────────────────────────────────────────────
 st.markdown("## 📍 3-Model AI Location Review Analyzer")
 st.caption("Search a place, scrape real Google Maps reviews, and run an end-to-end 3-Model AI verification & verdict pipeline.")
@@ -251,6 +258,7 @@ if analyze_btn:
                     search_query.strip(),
                     max_reviews=max_reviews,
                     progress_callback=handle_progress,
+                    force_refresh=force_refresh,
                 )
                 t_elapsed = time.time() - t_start
 
@@ -286,6 +294,14 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
     model_info   = data.get("model_info", {})
 
     st.divider()
+
+    # ── Cache provenance ──────────────────────────────────────────────────────
+    _cm = data.get("cache_meta") or {}
+    if _cm.get("served_from_cache"):
+        st.info(
+            f"⚡ Served from cache — analysed {_cm.get('age_hours', 0):.1f}h ago. "
+            "Tick **Force refresh** in the sidebar for fresh reviews."
+        )
 
     # ── Review counts ─────────────────────────────────────────────────────────
     rc1, rc2, rc3, rc4 = st.columns(4)
@@ -1089,8 +1105,8 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
         json_str = json.dumps(data, indent=2, ensure_ascii=False, default=str)
         loc_slug = "".join(
             c if c.isalnum() or c in " _-" else ""
-            for c in search_query
-        )[:30].strip().replace(" ", "_")
+            for c in (place_info.get("name") or search_query)
+        )[:40].strip().replace(" ", "_") or "report"
         st.download_button(
             label="📥 Download Full Report (.json)",
             data=json_str,

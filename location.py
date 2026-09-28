@@ -7,7 +7,7 @@ Two-Model Architecture:
 Final recommendation: deterministic Python scoring only.
 """
 
-import os, json, time, sys, re
+import os, json, time, sys, re, hashlib
 import urllib.request
 import urllib.parse
 from collections import Counter
@@ -114,6 +114,81 @@ def get_groq() -> "Groq":
             raise ConfigError("GROQ_API_KEY is not set.")
         _groq_client = Groq(api_key=GROQ_KEY)
     return _groq_client
+
+
+# ── Report cache ──────────────────────────────────────────────────────────────
+# The old scheme was `report_{first 30 alphanumerics of the query}.json` in the
+# current working directory. Every Google Maps URL normalises to roughly
+# "httpswwwgooglecommapsplace", so distinct places collided on one file and the
+# app could confidently serve you a report for somewhere else entirely.
+
+CACHE_DIR       = os.getenv("CACHE_DIR", "cache")
+CACHE_TTL_HOURS = float(os.getenv("CACHE_TTL_HOURS", "168"))   # 7 days
+# Bump when the pipeline's output shape or semantics change, to invalidate
+# everything written by an older version.
+CACHE_SCHEMA_VERSION = 2
+
+
+def _normalise_cache_query(location: str) -> str:
+    return " ".join((location or "").strip().lower().split())
+
+
+def cache_key(location: str, max_reviews: int) -> str:
+    """Collision-resistant key over the full query, review count and schema."""
+    raw = json.dumps(
+        [_normalise_cache_query(location), int(max_reviews), CACHE_SCHEMA_VERSION],
+        sort_keys=True,
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
+
+
+def cache_path(location: str, max_reviews: int) -> str:
+    return os.path.join(CACHE_DIR, f"report_{cache_key(location, max_reviews)}.json")
+
+
+def read_cache(location: str, max_reviews: int):
+    """Return a cached report, or None. Verifies the payload really matches."""
+    path = cache_path(location, max_reviews)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        console.print(f"[yellow]⚠ Cache read failed ({e}) — re-running pipeline.[/yellow]")
+        return None
+
+    meta = data.get("cache_meta") or {}
+    # Defend against a stale/hand-edited file landing on a matching hash.
+    if meta.get("query") != _normalise_cache_query(location) \
+            or meta.get("max_reviews") != int(max_reviews) \
+            or meta.get("schema_version") != CACHE_SCHEMA_VERSION:
+        console.print("[yellow]⚠ Cache entry does not match this query — ignoring.[/yellow]")
+        return None
+
+    age_h = (time.time() - meta.get("cached_at", 0)) / 3600
+    if age_h > CACHE_TTL_HOURS:
+        console.print(f"[dim]Cache entry is {age_h:.0f}h old (TTL {CACHE_TTL_HOURS:.0f}h) — refreshing.[/dim]")
+        return None
+
+    data["cache_meta"] = {**meta, "age_hours": round(age_h, 1), "served_from_cache": True}
+    console.print(f"[bold green]⚡ Cache hit[/bold green] [dim]({age_h:.1f}h old) → {path}[/dim]")
+    return data
+
+
+def write_cache(location: str, max_reviews: int, payload: dict) -> str:
+    path = cache_path(location, max_reviews)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    payload["cache_meta"] = {
+        "query":          _normalise_cache_query(location),
+        "original_query": location,
+        "max_reviews":    int(max_reviews),
+        "schema_version": CACHE_SCHEMA_VERSION,
+        "cached_at":      time.time(),
+    }
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False, default=str)
+    return path
 
 
 # ── Shared Groq helper ────────────────────────────────────────────────────────
@@ -1955,7 +2030,8 @@ def display_report(location, place_info, reviews, sentiment, guardrail, rec, ver
 
 # ── Main Pipeline ──────────────────────────────────────────────────────────────
 
-def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dict:
+def analyze(location: str, max_reviews: int = 30, progress_callback=None,
+            force_refresh: bool = False) -> dict:
     """
     Complete two-model pipeline:
       1. Apify — scrape reviews
@@ -1979,26 +2055,14 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
         expand=False,
     ))
 
-    # ── Calculate Cache Filename ──
-    slug     = "".join(c if c.isalnum() or c in " _-" else "" for c in location)[:30].strip()
-    out_file = f"report_{slug.replace(' ', '_')}.json"
-
-    # ── Stage 0: Check Cache (7 days) ──
-    if os.path.exists(out_file):
-        mtime = os.path.getmtime(out_file)
-        if (time.time() - mtime) < 7 * 24 * 3600:
-            console.print(f"[bold green]⚡ Cache Hit:[/bold green] Loading recent report from {out_file}")
+    # ── Stage 0: Cache lookup (hash of query + review count + schema) ──
+    if not force_refresh:
+        cached = read_cache(location, max_reviews)
+        if cached is not None:
             if progress_callback:
-                progress_callback(1, "Cache Hit", "Loading recent report from cache...")
-                time.sleep(0.5)
+                progress_callback(1, "Cache Hit", "Loading recent report from cache…")
                 progress_callback(6, "Complete", "Report loaded from cache.")
-            
-            try:
-                with open(out_file, "r", encoding="utf-8") as f:
-                    cached_data = json.load(f)
-                return cached_data
-            except Exception as e:
-                console.print(f"[yellow]⚠ Cache read failed: {e}. Re-running pipeline.[/yellow]")
+            return cached
 
     # ── Stage 1: Scrape ──
     if progress_callback:
@@ -2117,9 +2181,8 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
             "verdict_model": {"provider": "Groq", "model": VERDICT_MODEL},
         },
     }
-    with open(out_file, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2, ensure_ascii=False, default=str)
-    console.print(f"[dim]💾 Report saved → {out_file}[/dim]")
+    saved_to = write_cache(location, max_reviews, payload)
+    console.print(f"[dim]💾 Report saved → {saved_to}[/dim]")
 
     return payload
 
@@ -2135,6 +2198,11 @@ if __name__ == "__main__":
 
     loc = ""
     n   = 30
+
+    # --no-cache / --force bypass the report cache
+    argv  = sys.argv[:]
+    force = any(flag in argv for flag in ("--no-cache", "--force"))
+    sys.argv = [a for a in argv if a not in ("--no-cache", "--force")]
 
     if len(sys.argv) > 1:
         if len(sys.argv) > 2 and sys.argv[-1].isdigit():
@@ -2157,4 +2225,4 @@ if __name__ == "__main__":
         except (EOFError, KeyboardInterrupt):
             n = 30
 
-    analyze(loc, n)
+    analyze(loc, n, force_refresh=force)
