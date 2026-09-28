@@ -1,0 +1,555 @@
+{
+  "location": "https://maps.app.goo.gl/9q5h9U2uFmGZu4fJ7",
+  "place_info": {
+    "name": "AISSMS Institute of information technology",
+    "address": "GVJ8+FVR, Raja Bahadur Motilal Rd, k near RTO, Sangamvadi, Pune, Maharashtra 411001, India",
+    "google_score": 4.4,
+    "review_count": 1147,
+    "category": "College",
+    "subtypes": [
+      "College"
+    ],
+    "description": "",
+    "price": "",
+    "opening_hours": [
+      {
+        "day": "Monday",
+        "hours": "8 AM to 6 PM"
+      },
+      {
+        "day": "Tuesday",
+        "hours": "8 AM to 6 PM"
+      },
+      {
+        "day": "Wednesday",
+        "hours": "8 AM to 6 PM"
+      },
+      {
+        "day": "Thursday",
+        "hours": "8 AM to 6 PM"
+      },
+      {
+        "day": "Friday",
+        "hours": "8 AM to 6 PM"
+      },
+      {
+        "day": "Saturday",
+        "hours": "8 AM to 6 PM"
+      },
+      {
+        "day": "Sunday",
+        "hours": "Closed"
+      }
+    ],
+    "website": "http://www.aissmsioit.org/",
+    "phone": "+91 20 2605 7636",
+    "location_type": "",
+    "permanently_closed": false,
+    "temporarily_closed": false
+  },
+  "review_stats": {
+    "raw_scraped_count": 30,
+    "usable_text_review_count": 4,
+    "cleaned_review_count": 4,
+    "analyzed_review_count": 4
+  },
+  "reviews": [
+    {
+      "author": "Vinayak Raut",
+      "rating": 5,
+      "text": "It is an excellent college for engineering",
+      "date": "2026-08-07T06:52:06.230Z",
+      "likes": 0
+    },
+    {
+      "author": "Amol More",
+      "rating": 5,
+      "text": "AISSMS Institute of Information Technology, Pune, is a reputed engineering institute offering a supportive academic environment, experienced faculty, well-equipped laboratories, and opportunities for technical and extracurricular development. The institute encourages innovation, research, industry interaction, internships, and overall personality development. Its central location, active student activities, and focus on modern technology make it a good choice for students pursuing engineering education.",
+      "date": "2026-08-01T07:52:58.266Z",
+      "likes": 0
+    },
+    {
+      "author": "Aditya Khopade",
+      "rating": 4,
+      "text": "This college has its entire campus from school to graduation in single  big campus. Location is prime with being near to coep college. Anyways the college campus is good acc to tier 3 college",
+      "date": "2026-06-30T16:16:10.530Z",
+      "likes": 0
+    },
+    {
+      "author": "rizwan khan",
+      "rating": 5,
+      "text": "Amesing",
+      "date": "2026-05-28T19:08:31.518Z",
+      "likes": 0
+    }
+  ],
+  "sentiment": {
+    "per_review": [
+      {
+        "id": "r1",
+        "sentiment": "Positive",
+        "score": 0.9,
+        "emotion": "Satisfied",
+        "intensity": "High",
+        "key_phrase": "excellent college for engineering"
+      },
+      {
+        "id": "r2",
+        "sentiment": "Positive",
+        "score": 0.95,
+        "emotion": "Happy",
+        "intensity": "High",
+        "key_phrase": "reputed engineering institute with supportive environment"
+      },
+      {
+        "id": "r3",
+        "sentiment": "Positive",
+        "score": 0.7,
+        "emotion": "Satisfied",
+        "intensity": "Medium",
+        "key_phrase": "college campus is good for tier 3 college"
+      },
+      {
+        "id": "r4",
+        "sentiment": "Positive",
+        "score": 0.8,
+        "emotion": "Happy",
+        "intensity": "Medium",
+        "key_phrase": "amazing experience"
+      }
+    ],
+    "aspect_scores": {
+      "food_quality": {
+        "score": null,
+        "reviews_mentioning": 0,
+        "summary": null,
+        "evidence_review_ids": []
+      },
+      "service": {
+        "score": null,
+        "reviews_mentioning": 0,
+        "summary": null,
+        "evidence_review_ids": []
+      },
+      "ambience": {
+        "score": 2.0,
+        "reviews_mentioning": 2,
+        "summary": "Score: Not supported, Mentions: 2",
+        "evidence_review_ids": [
+          "r1",
+          "r3"
+        ]
+      },
+      "value_for_money": {
+        "score": null,
+        "reviews_mentioning": 0,
+        "summary": null,
+        "evidence_review_ids": []
+      },
+      "cleanliness": {
+        "score": null,
+        "reviews_mentioning": 0,
+        "summary": null,
+        "evidence_review_ids": []
+      },
+      "accessibility": {
+        "score": 0.0,
+        "reviews_mentioning": 1,
+        "summary": "Score: Not supported, Mentions: 0",
+        "evidence_review_ids": [
+          "r3"
+        ]
+      },
+      "crowd_wait_time": {
+        "score": null,
+        "reviews_mentioning": 0,
+        "summary": null,
+        "evidence_review_ids": []
+      }
+    },
+    "themes": [
+      {
+        "name": "Academic Environment",
+        "sentiment": "Positive",
+        "frequency": 2,
+        "representative_quote": "supportive academic environment",
+        "evidence": "reviewers praise the academic environment",
+        "evidence_review_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      {
+        "name": "Infrastructure",
+        "sentiment": "Positive",
+        "frequency": 2,
+        "representative_quote": "well-equipped laboratories",
+        "evidence": "reviewers appreciate the infrastructure",
+        "evidence_review_ids": [
+          "r2",
+          "r3"
+        ]
+      },
+      {
+        "name": "Location",
+        "sentiment": "Positive",
+        "frequency": 1,
+        "representative_quote": "prime location",
+        "evidence": "reviewer mentions the prime location",
+        "evidence_review_ids": [
+          "r3"
+        ]
+      }
+    ],
+    "positive_points": [
+      {
+        "claim": "Excellent academic environment",
+        "evidence_review_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      {
+        "claim": "Good infrastructure",
+        "evidence_review_ids": [
+          "r2",
+          "r3"
+        ]
+      }
+    ],
+    "negative_points": [
+      {
+        "claim": "None mentioned",
+        "evidence_review_ids": []
+      }
+    ],
+    "positive_keywords": [
+      "excellent",
+      "supportive",
+      "well-equipped"
+    ],
+    "negative_keywords": [],
+    "standout_positive_quote": "excellent college for engineering",
+    "standout_negative_quote": null,
+    "overall_sentiment": "Positive",
+    "sentiment_score": 0.85,
+    "emotional_tone": "Happy",
+    "emotion_distribution": {
+      "Excited": 0,
+      "Happy": 2,
+      "Satisfied": 2,
+      "Neutral": 0,
+      "Disappointed": 0,
+      "Frustrated": 0,
+      "Angry": 0
+    },
+    "crowd_profile": {
+      "dominant_visitor_type": "Students",
+      "mention_evidence": "reviews are from students",
+      "accessibility_notes": "prime location"
+    },
+    "temporal_trend": {
+      "recent_sentiment": "Positive",
+      "recent_score": 0.9,
+      "older_sentiment": "Positive",
+      "older_score": 0.8,
+      "trend": "Stable",
+      "trend_explanation": "sentiment remains positive over time"
+    },
+    "review_diversity": "Low",
+    "rating_counts": {
+      "5": 3,
+      "4": 1,
+      "3": 0,
+      "2": 0,
+      "1": 0
+    }
+  },
+  "guardrail": {
+    "trust_score": 0.0,
+    "credibility_score": 0.0,
+    "fake_review_probability": 0.0,
+    "review_quality": "Low",
+    "bias_level": "Low",
+    "bias_direction": "None",
+    "linguistic_analysis": {
+      "templated_language_detected": false,
+      "copy_paste_evidence": "description or null",
+      "vocabulary_diversity": "Low",
+      "writing_style_consistency": "Mixed",
+      "language_notes": "Reviews are short and lack detail."
+    },
+    "rating_integrity": {
+      "distribution_natural": true,
+      "anomalies": [],
+      "inflated_stars_estimate": 0,
+      "suppressed_stars_estimate": 0,
+      "adjusted_true_rating": 4.75,
+      "rating_notes": "Rating distribution appears natural."
+    },
+    "reviewer_behavior": {
+      "sock_puppet_risk": "Low",
+      "coordinated_posting_risk": "Low",
+      "evidence": "No evidence of coordinated posting detected."
+    },
+    "contradiction_analysis": [],
+    "aspect_credibility": {
+      "food_quality": {
+        "credible": false,
+        "confidence": 0.0,
+        "note": "No information available"
+      },
+      "service": {
+        "credible": false,
+        "confidence": 0.0,
+        "note": "No information available"
+      },
+      "ambience": {
+        "credible": false,
+        "confidence": 0.0,
+        "note": "No information available"
+      },
+      "value_for_money": {
+        "credible": false,
+        "confidence": 0.0,
+        "note": "No information available"
+      },
+      "cleanliness": {
+        "credible": false,
+        "confidence": 0.0,
+        "note": "No information available"
+      },
+      "crowd_wait_time": {
+        "credible": false,
+        "confidence": 0.0,
+        "note": "No information available"
+      }
+    },
+    "genuine_positives": [
+      {
+        "aspect": "Academic Environment",
+        "evidence": "supportive academic environment",
+        "confidence": 0.85,
+        "supporting_review_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      {
+        "aspect": "Infrastructure",
+        "evidence": "well-equipped laboratories",
+        "confidence": 0.85,
+        "supporting_review_ids": [
+          "r2",
+          "r3"
+        ]
+      },
+      {
+        "aspect": "Location",
+        "evidence": "prime location",
+        "confidence": 0.85,
+        "supporting_review_ids": [
+          "r3"
+        ]
+      }
+    ],
+    "genuine_concerns": [
+      {
+        "aspect": "None mentioned",
+        "evidence": "None mentioned",
+        "severity": "Moderate",
+        "supporting_review_ids": [
+          "r1"
+        ]
+      }
+    ],
+    "suspicious_patterns": [
+      "Too few reviews for high-confidence analysis — treat results with caution"
+    ],
+    "verified_facts": [
+      "Average rating of analyzed sample is 4.8★ across 4 reviews.",
+      "Top verified positive customer descriptors: excellent, supportive, well-equipped."
+    ],
+    "guardrail_summary": "Review integrity analysis is inconclusive due to limited review data.",
+    "analyst_recommendation": "More reviews are needed to establish trust in this review data.",
+    "heuristic_stats": {
+      "total_reviews": 4,
+      "avg_rating": 4.75,
+      "five_star_pct": 0.75,
+      "one_star_pct": 0.0,
+      "avg_review_length": 187.0,
+      "unique_authors": 4,
+      "duplicate_pairs": 0,
+      "repeated_phrases": []
+    }
+  },
+  "verification": {
+    "verification_status": "CORRECTED",
+    "accuracy": 0.92,
+    "sentiment": {
+      "status": "PASS",
+      "observations": [
+        "Overall sentiment matches review ratings and text."
+      ],
+      "issues": []
+    },
+    "aspects": {
+      "status": "CORRECTED",
+      "observations": [
+        "Ambience score is not supported by reviews, accessibility score is not supported by reviews."
+      ],
+      "issues": [
+        "Ambience score is not supported by reviews.",
+        "Accessibility score is not supported by reviews."
+      ]
+    },
+    "keywords": {
+      "status": "PASS",
+      "observations": [
+        "Keywords 'excellent', 'supportive' are genuinely frequent in review text."
+      ],
+      "issues": []
+    },
+    "guardrail": {
+      "status": "PASS",
+      "observations": [
+        "Reviews are authentic with organic variation and believable tone."
+      ],
+      "issues": []
+    },
+    "evidence": {
+      "status": "PASS",
+      "observations": [
+        "Cited claims accurately reflect reviewer statements."
+      ],
+      "unsupported_claims": [
+        "Good infrastructure",
+        "Excellent academic environment"
+      ],
+      "issues": []
+    },
+    "hallucination_detected": false,
+    "corrections": [
+      {
+        "field": "aspects.ambience",
+        "original_claim": "Score: 8.0, Mentions: 2",
+        "corrected_claim": "Score: Not supported, Mentions: 2",
+        "reason": "Reviews do not mention ambience.",
+        "evidence_review_ids": [
+          "r1",
+          "r3"
+        ]
+      },
+      {
+        "field": "aspects.accessibility",
+        "original_claim": "Score: 8.0, Mentions: 1",
+        "corrected_claim": "Score: Not supported, Mentions: 0",
+        "reason": "Reviews do not mention accessibility.",
+        "evidence_review_ids": [
+          "r3"
+        ]
+      },
+      {
+        "field": "evidence.positive_points.0.claim",
+        "original_claim": "Excellent academic environment",
+        "corrected_claim": "Not mentioned",
+        "reason": "Reviews do not mention excellent academic environment.",
+        "evidence_review_ids": [
+          "r1",
+          "r2"
+        ]
+      },
+      {
+        "field": "evidence.positive_points.1.claim",
+        "original_claim": "Good infrastructure",
+        "corrected_claim": "Not mentioned",
+        "reason": "Reviews do not mention good infrastructure.",
+        "evidence_review_ids": [
+          "r2",
+          "r3"
+        ]
+      }
+    ],
+    "missing_positive_evidence": [],
+    "missing_negative_evidence": [],
+    "verification_notes": "Model 1's claims about ambience, accessibility, and some positive points are not supported by reviews.",
+    "status": "CORRECTED",
+    "corrections_count": 4
+  },
+  "recommendation": {
+    "recommendation": "NOT RECOMMENDED",
+    "confidence": 0.18,
+    "visit_score": 3.87,
+    "one_line_verdict": "Not ideal due to mixed reviews",
+    "full_verdict": "The AISSMS Institute of Information Technology has a positive overall sentiment, with reviewers praising its academic environment and infrastructure. However, the low confidence score and limited number of reviews analyzed suggest that this verdict may not be entirely reliable. Visitors may still find the institute to be a good choice, but should be aware of the potential risks. Ultimately, the decision to visit will depend on individual priorities and preferences.",
+    "best_for": [
+      "students",
+      "academics"
+    ],
+    "avoid_if": [
+      "looking for a highly rated institution"
+    ],
+    "pros": [
+      {
+        "point": "excellent academic environment",
+        "weight": "High"
+      },
+      {
+        "point": "well-equipped infrastructure",
+        "weight": "Medium"
+      }
+    ],
+    "cons": [
+      {
+        "point": "limited number of reviews",
+        "weight": "Low"
+      }
+    ],
+    "visitor_tips": [
+      "research thoroughly before visiting",
+      "consider multiple sources"
+    ],
+    "best_time": null,
+    "data_reliability": "Low",
+    "score_breakdown": {
+      "sentiment_score": 9.25,
+      "rating_score": 8.8,
+      "trust_score": 0.0,
+      "composite": 3.87
+    }
+  },
+  "model_info": {
+    "three_model_pipeline": true,
+    "model_1": {
+      "role": "Primary Analyst (Model A)",
+      "provider": "Groq",
+      "sentiment_model": "llama-3.3-70b-versatile",
+      "guardrail_model": "llama-3.1-8b-instant"
+    },
+    "model_2": {
+      "role": "Independent Verifier (Model B)",
+      "provider": "Groq",
+      "model": "llama-3.1-8b-instant",
+      "status": "CORRECTED"
+    },
+    "model_3": {
+      "role": "Executive Verdict (Model C)",
+      "provider": "Groq",
+      "model": "deepseek-r1-distill-llama-70b"
+    },
+    "model_a": {
+      "provider": "Groq",
+      "model": "llama-3.3-70b-versatile",
+      "fast_model": "llama-3.1-8b-instant"
+    },
+    "model_b": {
+      "provider": "Groq",
+      "model": "llama-3.1-8b-instant",
+      "status": "CORRECTED"
+    },
+    "verdict_model": {
+      "provider": "Groq",
+      "model": "deepseek-r1-distill-llama-70b"
+    }
+  }
+}

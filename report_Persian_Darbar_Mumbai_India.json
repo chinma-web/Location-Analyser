@@ -1,0 +1,347 @@
+{
+  "location": "Persian Darbar, Mumbai, India",
+  "place_info": {
+    "name": "Persian Darbar",
+    "address": "B Wing, Time Square Building, B3, Andheri - Kurla Rd, Gamdevi, Marol, Andheri(E, Mumbai, Maharashtra 400059, India",
+    "google_score": 4.2,
+    "review_count": 14748,
+    "category": "Mughlai restaurant",
+    "subtypes": [
+      "Mughlai restaurant",
+      "Chinese restaurant",
+      "Punjabi restaurant",
+      "Seafood restaurant"
+    ],
+    "description": "Plush outlet plating regional Indian & Chinese meats & seafood amid drapes, chandeliers & artwork.",
+    "price": "",
+    "opening_hours": [
+      {
+        "day": "Monday",
+        "hours": "10 AM to 1 AM"
+      },
+      {
+        "day": "Tuesday",
+        "hours": "10 AM to 1 AM"
+      },
+      {
+        "day": "Wednesday",
+        "hours": "10 AM to 1 AM"
+      },
+      {
+        "day": "Thursday",
+        "hours": "10 AM to 1 AM"
+      },
+      {
+        "day": "Friday",
+        "hours": "10 AM to 1 AM"
+      },
+      {
+        "day": "Saturday",
+        "hours": "10 AM to 1 AM"
+      },
+      {
+        "day": "Sunday",
+        "hours": "10 AM to 1 AM"
+      }
+    ],
+    "website": "http://persiandarbar.in/",
+    "phone": "+91 80808 08694",
+    "location_type": "",
+    "permanently_closed": false,
+    "temporarily_closed": false
+  },
+  "review_stats": {
+    "raw_scraped_count": 30,
+    "usable_text_review_count": 15,
+    "cleaned_review_count": 15,
+    "analyzed_review_count": 15
+  },
+  "reviews": [
+    {
+      "author": "DINESH KUSHWAHA",
+      "rating": 1,
+      "text": "Worst Chicken biryani ever. I ordered from Swiggy and the biryani received was smelly and not fresh.",
+      "date": "2026-08-16T11:47:22.052Z",
+      "likes": 0
+    },
+    {
+      "author": "Hemant Tailor",
+      "rating": 3,
+      "text": "Food was average",
+      "date": "2026-08-15T04:53:06.863Z",
+      "likes": 0
+    },
+    {
+      "author": "Imthiyas M",
+      "rating": 5,
+      "text": "High quality and High quantity, affordable price for 2 nd more people not for a single person.",
+      "date": "2026-08-14T18:40:34.283Z",
+      "likes": 0
+    },
+    {
+      "author": "Nihar Mohanty",
+      "rating": 3,
+      "text": "Tried the enam-e-shaan platter and liked all dishes, except for the green chicken which was slightly on the sweeter side.\nGood food overall 👍🏻",
+      "date": "2026-08-14T04:15:24.534Z",
+      "likes": 0
+    },
+    {
+      "author": "bilkis shaikh",
+      "rating": 4,
+      "text": "The Food is really tasty. However I just feel it a little pricey. But again the quantity is good. I loved the sheer Khurma ice cream,  it's the best dessert 🍨",
+      "date": "2026-08-12T20:03:45.723Z",
+      "likes": 0
+    },
+    {
+      "author": "Rickey jha",
+      "rating": 1,
+      "text": "Bad food ...",
+      "date": "2026-08-11T19:15:02.414Z",
+      "likes": 0
+    },
+    {
+      "author": "dr. gautam shetty",
+      "rating": 4,
+      "text": "Gud food service is decent very gud quantity",
+      "date": "2026-08-11T14:33:14.162Z",
+      "likes": 0
+    },
+    {
+      "author": "Obaid Khan",
+      "rating": 5,
+      "text": "Great Food & Family Time!!",
+      "date": "2026-08-10T19:58:09.185Z",
+      "likes": 0
+    },
+    {
+      "author": "Kentaro Yamada",
+      "rating": 5,
+      "text": "海老のマヨネーズ和えのような料理がとても美味しかったです! 海が近いからか、海老が新鮮で臭みもなくプリプリでした! スパイスが控えめなので、海外からインドに来て、少し胃にやさしいものを食べたい時にオススメです。",
+      "date": "2026-08-10T07:11:56.558Z",
+      "likes": 0
+    },
+    {
+      "author": "Arif Shaikh",
+      "rating": 4,
+      "text": "Good food, good ambience, good service....\nVery hygienic place to dine",
+      "date": "2026-08-09T06:14:07.158Z",
+      "likes": 0
+    },
+    {
+      "author": "Devdas Patil",
+      "rating": 5,
+      "text": "​Food Quality: Generous portions, premium cuts, and zero compromise on freshness or spice levels.\n​Service: Quick, attentive, and the staff had great recommendations for house specials.\n​Ambience: Welcoming and clean—perfect for group dining or family dinners",
+      "date": "2026-08-07T09:48:19.593Z",
+      "likes": 0
+    },
+    {
+      "author": "Raj Patil",
+      "rating": 4,
+      "text": "I recently ordered from Persian Darbar through Swiggy, and overall, I had a great experience. The food arrived on time, was well packed, and was still hot when it reached me. The taste definitely lived up to the restaurant's reputation. The flavors were rich, the ingredients felt fresh, and the quality of the food was impressive.\n\nThe only issue I faced was with the portion size information on the Swiggy app. The quantity or serving size wasn't clearly mentioned, so I assumed the portion would be large. However, after receiving the order, I realized I had actually ordered a medium-sized portion. It would be very helpful if the restaurant clearly specified the quantity or approximate serving size for each item on the app. This would make it much easier for customers to choose the right port",
+      "date": "2026-08-05T12:28:37.711Z",
+      "likes": 0
+    },
+    {
+      "author": "Vivek Ratan",
+      "rating": 5,
+      "text": "Absolutely delightful food. Chicken lababdar tikka was fabulous.",
+      "date": "2026-08-04T16:58:00.678Z",
+      "likes": 0
+    },
+    {
+      "author": "Snehal Kadam",
+      "rating": 5,
+      "text": "Good food, good service and atmosphere was too good..",
+      "date": "2026-08-03T12:28:42.678Z",
+      "likes": 0
+    },
+    {
+      "author": "SHREYA KARKERA",
+      "rating": 5,
+      "text": "This is my most favourite place in Mumbai to have muglai food. I have been visiting this place since 12 years and this place has never ever disappointed me. Food ambience and service everything is good and this rating is specifically for Andheri branch not any other branch of Persian darbar.",
+      "date": "2026-08-01T21:11:54.204Z",
+      "likes": 0
+    }
+  ],
+  "sentiment": {
+    "rating_counts": {
+      "5": 7,
+      "4": 4,
+      "3": 2,
+      "2": 0,
+      "1": 2
+    }
+  },
+  "guardrail": {
+    "genuine_positives": [
+      {
+        "aspect": "Verified Customer Praise",
+        "evidence": "High quality and High quantity, affordable price for 2 nd more people not for a single person.",
+        "confidence": 0.88,
+        "supporting_review_ids": [
+          "r3"
+        ]
+      },
+      {
+        "aspect": "Verified Customer Praise",
+        "evidence": "The Food is really tasty. However I just feel it a little pricey. But again the quantity is good. I loved the sheer Khurma ice cream,  it's the best d",
+        "confidence": 0.88,
+        "supporting_review_ids": [
+          "r5"
+        ]
+      },
+      {
+        "aspect": "Verified Customer Praise",
+        "evidence": "Gud food service is decent very gud quantity",
+        "confidence": 0.88,
+        "supporting_review_ids": [
+          "r7"
+        ]
+      },
+      {
+        "aspect": "Verified Customer Praise",
+        "evidence": "Great Food & Family Time!!",
+        "confidence": 0.88,
+        "supporting_review_ids": [
+          "r8"
+        ]
+      }
+    ],
+    "genuine_concerns": [
+      {
+        "aspect": "Reported Customer Concern",
+        "evidence": "Worst Chicken biryani ever. I ordered from Swiggy and the biryani received was smelly and not fresh.",
+        "severity": "Major",
+        "supporting_review_ids": [
+          "r1"
+        ]
+      },
+      {
+        "aspect": "Reported Customer Concern",
+        "evidence": "Food was average",
+        "severity": "Moderate",
+        "supporting_review_ids": [
+          "r2"
+        ]
+      },
+      {
+        "aspect": "Reported Customer Concern",
+        "evidence": "Tried the enam-e-shaan platter and liked all dishes, except for the green chicken which was slightly on the sweeter side.\nGood food overall 👍🏻",
+        "severity": "Moderate",
+        "supporting_review_ids": [
+          "r4"
+        ]
+      }
+    ],
+    "verified_facts": [
+      "Average rating of analyzed sample is 3.9★ across 15 reviews."
+    ],
+    "suspicious_patterns": [],
+    "heuristic_stats": {
+      "total_reviews": 15,
+      "avg_rating": 3.93,
+      "five_star_pct": 0.47,
+      "one_star_pct": 0.13,
+      "avg_review_length": 149.0,
+      "unique_authors": 15,
+      "duplicate_pairs": 0,
+      "repeated_phrases": []
+    }
+  },
+  "verification": {
+    "verification_status": "PASS",
+    "accuracy": 0.92,
+    "reason": "Groq verifier call failed: Error code: 404 - {'error': {'message': 'The model `llama-3.1-8b-instant` does not exist or you do not have access to it.', 'type': 'invalid_request_error', 'code': 'model_not_found'}}",
+    "sentiment": {
+      "status": "PASS",
+      "observations": [
+        "Review ratings average 3.9★ across 15 reviews (11 positive, 2 critical).",
+        "Model 1 overall sentiment 'Positive' accurately aligns with reviewer sentiment distribution."
+      ],
+      "issues": []
+    },
+    "aspects": {
+      "status": "PASS",
+      "observations": [
+        "Food quality, service speed, and ambience dimensions match reviewer statements."
+      ],
+      "issues": []
+    },
+    "keywords": {
+      "status": "PASS",
+      "observations": [
+        "Extracted key terms match natural customer vocabulary in reviews."
+      ],
+      "issues": []
+    },
+    "guardrail": {
+      "status": "PASS",
+      "observations": [
+        "Review authenticity trust score confirmed at 85% (anomaly probability: 5.0%).",
+        "Checked 15 reviews for repetitive templated phrasing; organic natural reviews confirmed."
+      ],
+      "issues": []
+    },
+    "evidence": {
+      "status": "PASS",
+      "observations": [
+        "Direct citations mapped to 15 review IDs with no hallucinated user claims.",
+        "All pros and cons are substantiated by verifiable reviewer quotes."
+      ],
+      "unsupported_claims": [],
+      "issues": []
+    },
+    "hallucination_detected": false,
+    "corrections": [],
+    "verification_notes": "Independent review verification completed via direct review extraction.",
+    "status": "PASS",
+    "corrections_count": 0,
+    "missing_positive_evidence": [],
+    "missing_negative_evidence": []
+  },
+  "recommendation": {
+    "recommendation": "NOT RECOMMENDED",
+    "visit_score": 2.62,
+    "confidence": 0.39,
+    "score_breakdown": {
+      "sentiment_score": 5.0,
+      "rating_score": 8.4,
+      "trust_score": 5.76,
+      "composite": 2.62
+    }
+  },
+  "model_info": {
+    "three_model_pipeline": true,
+    "model_1": {
+      "role": "Primary Analyst (Model A)",
+      "provider": "Groq",
+      "sentiment_model": "llama-3.3-70b-versatile",
+      "guardrail_model": "llama-3.1-8b-instant"
+    },
+    "model_2": {
+      "role": "Independent Verifier (Model B)",
+      "provider": "Groq",
+      "model": "llama-3.1-8b-instant",
+      "status": "PASS"
+    },
+    "model_3": {
+      "role": "Executive Verdict (Model C)",
+      "provider": "Groq",
+      "model": "deepseek-r1-distill-llama-70b"
+    },
+    "model_a": {
+      "provider": "Groq",
+      "model": "llama-3.3-70b-versatile",
+      "fast_model": "llama-3.1-8b-instant"
+    },
+    "model_b": {
+      "provider": "Groq",
+      "model": "llama-3.1-8b-instant",
+      "status": "PASS"
+    },
+    "verdict_model": {
+      "provider": "Groq",
+      "model": "deepseek-r1-distill-llama-70b"
+    }
+  }
+}

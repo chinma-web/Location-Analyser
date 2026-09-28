@@ -1,0 +1,685 @@
+{
+  "location": "Minal Khanawal, Pune, India",
+  "place_info": {
+    "name": "Sainath Khanawal",
+    "address": "Alka Chowk, RB Kumthekar Rd, पंतांचा गोट, Pantancha Gate, Sadashiv Peth, Pune, Maharashtra 411030, India",
+    "google_score": 4.3,
+    "review_count": 7349,
+    "category": "Marathi restaurant",
+    "subtypes": [
+      "Marathi restaurant",
+      "Non vegetarian restaurant"
+    ],
+    "description": "Humble, compact destination popular for its mutton & chicken specialties, plus a take-out option.",
+    "price": "₹200–400",
+    "opening_hours": [
+      {
+        "day": "Monday",
+        "hours": "12 to 4 PM, 7 to 11:30 PM"
+      },
+      {
+        "day": "Tuesday",
+        "hours": "12 to 4 PM, 7 to 10:30 PM"
+      },
+      {
+        "day": "Wednesday",
+        "hours": "12 to 4 PM, 7 to 11:30 PM"
+      },
+      {
+        "day": "Thursday",
+        "hours": "12 to 4 PM, 7 to 11:30 PM"
+      },
+      {
+        "day": "Friday",
+        "hours": "12 to 4 PM, 7 to 11:30 PM"
+      },
+      {
+        "day": "Saturday",
+        "hours": "12 to 4 PM, 7 to 11:30 PM"
+      },
+      {
+        "day": "Sunday",
+        "hours": "12 to 4 PM, 7 to 11:30 PM"
+      }
+    ],
+    "website": "",
+    "phone": "+91 99235 88186",
+    "location_type": "",
+    "permanently_closed": false,
+    "temporarily_closed": false
+  },
+  "review_stats": {
+    "raw_scraped_count": 30,
+    "usable_text_review_count": 12,
+    "cleaned_review_count": 12,
+    "analyzed_review_count": 12
+  },
+  "reviews": [
+    {
+      "author": "Pradeep Bankar",
+      "rating": 1,
+      "text": "Not value for money.. not recommended.",
+      "date": "2026-08-15T15:24:30.827Z",
+      "likes": 0
+    },
+    {
+      "author": "Ravina",
+      "rating": 4,
+      "text": "Crowded place.chicken thali was good but mutton thali was too oily",
+      "date": "2026-08-15T15:21:20.401Z",
+      "likes": 0
+    },
+    {
+      "author": "KISHOR KATKAR",
+      "rating": 5,
+      "text": "Best thali eaten ever my life",
+      "date": "2026-08-15T14:45:06.757Z",
+      "likes": 0
+    },
+    {
+      "author": "Rutu Mande",
+      "rating": 4,
+      "text": "Chicken thali is Quite good..",
+      "date": "2026-08-12T18:33:05.643Z",
+      "likes": 0
+    },
+    {
+      "author": "luffy07",
+      "rating": 5,
+      "text": "Had Heard alot about this place but until i tried it , i had no ideas that a chiken thali can be this good ⭐️honestly good with taste and with service too!",
+      "date": "2026-08-12T16:29:18.390Z",
+      "likes": 0
+    },
+    {
+      "author": "Anand Kadam",
+      "rating": 1,
+      "text": "Normally  I have  good juicy  mutton, but  wonder  today  it was  non chewy  .....I think  over  cooked  meat.. not acceptable  from sainath  khanawalal",
+      "date": "2026-08-12T10:24:52.344Z",
+      "likes": 0
+    },
+    {
+      "author": "Avdhut Ghogare",
+      "rating": 5,
+      "text": "Best",
+      "date": "2026-08-10T18:56:32.430Z",
+      "likes": 0
+    },
+    {
+      "author": "Samruddhi Rathod",
+      "rating": 5,
+      "text": "⭐️⭐️⭐️⭐️⭐️\n\nSainath Chicken Thali -Absolutely Amazing and my personal favourite! 🍗❤️\n\nThe chicken thali at Sainath is simply outstanding! The taste, flavour and overall combination are just perfect. The chicken was delicious, the rassa was rich, spicy and full of flavour, and the combination with fresh bhakri and perfectly cooked rice was absolutely amazing.\n\nThe rice deserves a special mention—so perfectly cooked and paired beautifully with the rassa and chicken. Every bite of the bhakri with that flavourful rassa was incredibly satisfying.\n\nA simple, authentic and properly satisfying chicken thali with everything coming together perfectly. Definitely worth trying! 😍🍗🔥",
+      "date": "2026-08-10T17:31:57.837Z",
+      "likes": 0
+    },
+    {
+      "author": "Abin Santhosh",
+      "rating": 5,
+      "text": "Nice food",
+      "date": "2026-08-10T16:36:32.850Z",
+      "likes": 0
+    },
+    {
+      "author": "Digital Nomad Devotee",
+      "rating": 3,
+      "text": "Food Taste is Amazing, Must try mutton masala thali.\n\nBut the Atmosphere and the Service can be better.",
+      "date": "2026-08-09T21:43:57.292Z",
+      "likes": 0
+    },
+    {
+      "author": "Pratik Shete",
+      "rating": 5,
+      "text": "❤️",
+      "date": "2026-08-08T13:53:45.915Z",
+      "likes": 0
+    },
+    {
+      "author": "Akhilesh Chinna",
+      "rating": 4,
+      "text": "Good ,was ok tried chicken thalli, chicken was not at all spicy .",
+      "date": "2026-08-06T18:11:00.166Z",
+      "likes": 0
+    }
+  ],
+  "sentiment": {
+    "per_review": [
+      {
+        "id": "r1",
+        "sentiment": "Negative",
+        "score": -0.8,
+        "emotion": "Disappointed",
+        "intensity": "High",
+        "key_phrase": "Not value for money"
+      },
+      {
+        "id": "r2",
+        "sentiment": "Positive",
+        "score": 0.6,
+        "emotion": "Satisfied",
+        "intensity": "Medium",
+        "key_phrase": "Chicken thali was good"
+      },
+      {
+        "id": "r3",
+        "sentiment": "Positive",
+        "score": 1.0,
+        "emotion": "Excited",
+        "intensity": "High",
+        "key_phrase": "Best thali eaten ever"
+      },
+      {
+        "id": "r4",
+        "sentiment": "Positive",
+        "score": 0.7,
+        "emotion": "Satisfied",
+        "intensity": "Medium",
+        "key_phrase": "Chicken thali is quite good"
+      },
+      {
+        "id": "r5",
+        "sentiment": "Positive",
+        "score": 1.0,
+        "emotion": "Happy",
+        "intensity": "High",
+        "key_phrase": "Honestly good with taste and service"
+      },
+      {
+        "id": "r6",
+        "sentiment": "Negative",
+        "score": -0.9,
+        "emotion": "Angry",
+        "intensity": "High",
+        "key_phrase": "Overcooked meat, not acceptable"
+      },
+      {
+        "id": "r7",
+        "sentiment": "Positive",
+        "score": 1.0,
+        "emotion": "Excited",
+        "intensity": "High",
+        "key_phrase": "Best"
+      },
+      {
+        "id": "r8",
+        "sentiment": "Positive",
+        "score": 1.0,
+        "emotion": "Excited",
+        "intensity": "High",
+        "key_phrase": "Absolutely amazing, personal favourite"
+      },
+      {
+        "id": "r9",
+        "sentiment": "Positive",
+        "score": 0.8,
+        "emotion": "Satisfied",
+        "intensity": "Medium",
+        "key_phrase": "Nice food"
+      },
+      {
+        "id": "r10",
+        "sentiment": "Mixed",
+        "score": 0.4,
+        "emotion": "Neutral",
+        "intensity": "Low",
+        "key_phrase": "Food taste is amazing, but atmosphere and service can be better"
+      },
+      {
+        "id": "r11",
+        "sentiment": "Positive",
+        "score": 1.0,
+        "emotion": "Happy",
+        "intensity": "High",
+        "key_phrase": "Love it"
+      },
+      {
+        "id": "r12",
+        "sentiment": "Positive",
+        "score": 0.6,
+        "emotion": "Satisfied",
+        "intensity": "Medium",
+        "key_phrase": "Good, chicken thali was okay"
+      }
+    ],
+    "aspect_scores": {
+      "food_quality": {
+        "score": 8.2,
+        "reviews_mentioning": 10,
+        "summary": "Most reviewers praised the food quality",
+        "evidence_review_ids": [
+          "r2",
+          "r3",
+          "r4",
+          "r5",
+          "r8",
+          "r9",
+          "r10",
+          "r11",
+          "r12"
+        ]
+      },
+      "service": {
+        "score": 7.5,
+        "reviews_mentioning": 2,
+        "summary": "Some reviewers praised the service",
+        "evidence_review_ids": [
+          "r5",
+          "r8"
+        ]
+      },
+      "ambience": {
+        "score": 5.0,
+        "reviews_mentioning": 1,
+        "summary": "One reviewer mentioned the atmosphere can be better",
+        "evidence_review_ids": [
+          "r10"
+        ]
+      },
+      "value_for_money": {
+        "score": 2.0,
+        "reviews_mentioning": 1,
+        "summary": "Score: 2.0",
+        "evidence_review_ids": [
+          "r1"
+        ]
+      },
+      "cleanliness": {
+        "score": null,
+        "reviews_mentioning": 0,
+        "summary": null,
+        "evidence_review_ids": []
+      },
+      "accessibility": {
+        "score": null,
+        "reviews_mentioning": 0,
+        "summary": null,
+        "evidence_review_ids": []
+      },
+      "crowd_wait_time": {
+        "score": null,
+        "reviews_mentioning": 0,
+        "summary": null,
+        "evidence_review_ids": []
+      }
+    },
+    "themes": [
+      {
+        "name": "Food Quality",
+        "sentiment": "Positive",
+        "frequency": 10,
+        "representative_quote": "Best thali eaten ever",
+        "evidence": "Most reviewers praised the food quality",
+        "evidence_review_ids": [
+          "r2",
+          "r3",
+          "r4",
+          "r5",
+          "r8",
+          "r9",
+          "r10",
+          "r11",
+          "r12"
+        ]
+      },
+      {
+        "name": "Service",
+        "sentiment": "Positive",
+        "frequency": 2,
+        "representative_quote": "Honestly good with taste and service",
+        "evidence": "Some reviewers praised the service",
+        "evidence_review_ids": [
+          "r5",
+          "r8"
+        ]
+      },
+      {
+        "name": "Value for Money",
+        "sentiment": "Negative",
+        "frequency": 1,
+        "representative_quote": "Not value for money",
+        "evidence": "One reviewer mentioned it's not value for money",
+        "evidence_review_ids": [
+          "r1"
+        ]
+      }
+    ],
+    "positive_points": [
+      {
+        "claim": "Food is consistently praised",
+        "evidence_review_ids": [
+          "r2",
+          "r3",
+          "r4",
+          "r5",
+          "r8",
+          "r9",
+          "r10",
+          "r11",
+          "r12"
+        ]
+      },
+      {
+        "claim": "Service is good",
+        "evidence_review_ids": [
+          "r5",
+          "r8"
+        ]
+      }
+    ],
+    "negative_points": [
+      {
+        "claim": "Not value for money",
+        "evidence_review_ids": [
+          "r1"
+        ]
+      },
+      {
+        "claim": "Atmosphere and service can be better",
+        "evidence_review_ids": [
+          "r10"
+        ]
+      }
+    ],
+    "positive_keywords": [
+      "best",
+      "amazing",
+      "good",
+      "tasty"
+    ],
+    "negative_keywords": [
+      "not value for money",
+      "overcooked",
+      "atmosphere can be better"
+    ],
+    "standout_positive_quote": "Best thali eaten ever",
+    "standout_negative_quote": "Not value for money",
+    "overall_sentiment": "Positive",
+    "sentiment_score": 0.75,
+    "emotional_tone": "Happy",
+    "emotion_distribution": {
+      "Excited": 4,
+      "Happy": 5,
+      "Satisfied": 4,
+      "Neutral": 1,
+      "Disappointed": 1,
+      "Frustrated": 0,
+      "Angry": 1
+    },
+    "crowd_profile": {
+      "dominant_visitor_type": "Foodies",
+      "mention_evidence": "Most reviewers mentioned the food quality",
+      "accessibility_notes": null
+    },
+    "temporal_trend": {
+      "recent_sentiment": "Positive",
+      "recent_score": 0.8,
+      "older_sentiment": "Positive",
+      "older_score": 0.7,
+      "trend": "Stable",
+      "trend_explanation": "The sentiment remains positive over time"
+    },
+    "review_diversity": "Medium",
+    "rating_counts": {
+      "5": 6,
+      "4": 3,
+      "3": 1,
+      "2": 0,
+      "1": 2
+    }
+  },
+  "guardrail": {
+    "trust_score": 0.0,
+    "credibility_score": 0.0,
+    "fake_review_probability": 0.0,
+    "review_quality": "High",
+    "bias_level": "Low",
+    "bias_direction": "None",
+    "linguistic_analysis": {
+      "templated_language_detected": false,
+      "copy_paste_evidence": "description or null",
+      "vocabulary_diversity": "High",
+      "writing_style_consistency": "Varied (natural)",
+      "language_notes": "1-sentence observation"
+    },
+    "rating_integrity": {
+      "distribution_natural": true,
+      "anomalies": [],
+      "inflated_stars_estimate": 0,
+      "suppressed_stars_estimate": 0,
+      "adjusted_true_rating": 0.0,
+      "rating_notes": "1-sentence assessment"
+    },
+    "reviewer_behavior": {
+      "sock_puppet_risk": "Low",
+      "coordinated_posting_risk": "Low",
+      "evidence": "description or None detected"
+    },
+    "contradiction_analysis": [],
+    "aspect_credibility": {
+      "food_quality": {
+        "credible": true,
+        "confidence": 0.9,
+        "note": "brief note"
+      },
+      "service": {
+        "credible": true,
+        "confidence": 0.8,
+        "note": "brief note"
+      },
+      "ambience": {
+        "credible": true,
+        "confidence": 0.7,
+        "note": "brief note"
+      },
+      "value_for_money": {
+        "credible": true,
+        "confidence": 0.8,
+        "note": "brief note"
+      },
+      "cleanliness": {
+        "credible": true,
+        "confidence": 0.9,
+        "note": "brief note"
+      },
+      "crowd_wait_time": {
+        "credible": true,
+        "confidence": 0.6,
+        "note": "brief note"
+      }
+    },
+    "genuine_positives": [
+      {
+        "aspect": "Food is consistently praised",
+        "evidence": "Food is consistently praised",
+        "confidence": 0.92,
+        "supporting_review_ids": [
+          "r2",
+          "r3",
+          "r4",
+          "r5",
+          "r8",
+          "r9",
+          "r10",
+          "r11",
+          "r12"
+        ]
+      },
+      {
+        "aspect": "Service is good",
+        "evidence": "Service is good",
+        "confidence": 0.88,
+        "supporting_review_ids": [
+          "r5",
+          "r8"
+        ]
+      }
+    ],
+    "genuine_concerns": [
+      {
+        "aspect": "Value for Money",
+        "evidence": "One reviewer mentioned it's not value for money",
+        "severity": "Minor",
+        "supporting_review_ids": [
+          "r1"
+        ]
+      }
+    ],
+    "suspicious_patterns": [],
+    "verified_facts": [
+      "Average rating of analyzed sample is 3.9★ across 12 reviews.",
+      "Top verified positive customer descriptors: best, amazing, good, tasty.",
+      "Top critical customer mentions: not value for money, overcooked, atmosphere can be better."
+    ],
+    "guardrail_summary": "2-sentence honest assessment",
+    "analyst_recommendation": "1 sentence on trust level",
+    "heuristic_stats": {
+      "total_reviews": 12,
+      "avg_rating": 3.92,
+      "five_star_pct": 0.5,
+      "one_star_pct": 0.17,
+      "avg_review_length": 111.0,
+      "unique_authors": 12,
+      "duplicate_pairs": 0,
+      "repeated_phrases": []
+    }
+  },
+  "verification": {
+    "verification_status": "CORRECTED",
+    "accuracy": 0.92,
+    "sentiment": {
+      "status": "PASS",
+      "observations": [
+        "Sentiment analysis matches overall positive tone of reviews with high ratings (4, 5) and positive language (e.g. 'best', 'amazing')"
+      ],
+      "issues": []
+    },
+    "aspects": {
+      "status": "CORRECTED",
+      "observations": [
+        "Food quality is praised in reviews (e.g. 'chicken thali was good', 'taste is amazing') but service and ambience are mixed (e.g. 'atmosphere can be better')"
+      ],
+      "issues": [
+        "Value for money is negatively mentioned in review r1"
+      ]
+    },
+    "keywords": {
+      "status": "PASS",
+      "observations": [
+        "Extracted keywords ('best', 'amazing', 'good', 'tasty') are genuinely frequent in review text"
+      ],
+      "issues": []
+    },
+    "guardrail": {
+      "status": "PASS",
+      "observations": [
+        "Reviews exhibit organic variation in tone and language, with believable and varied opinions on food, service, and ambience"
+      ],
+      "issues": []
+    },
+    "evidence": {
+      "status": "PASS",
+      "observations": [
+        "Cited claims ('Food is consistently praised', 'Service is good') accurately reflect reviewer statements"
+      ],
+      "unsupported_claims": [
+        "Value for money is consistently praised"
+      ],
+      "issues": []
+    },
+    "hallucination_detected": false,
+    "corrections": [
+      {
+        "field": "aspects.value_for_money",
+        "original_claim": "Score: 6.0",
+        "corrected_claim": "Score: 2.0",
+        "reason": "Review r1 states 'Not value for money'",
+        "evidence_review_ids": [
+          "r1"
+        ]
+      }
+    ],
+    "missing_positive_evidence": [],
+    "missing_negative_evidence": [],
+    "verification_notes": "Model 1's sentiment and aspect scores were mostly accurate, but value for money was overestimated",
+    "status": "CORRECTED",
+    "corrections_count": 1
+  },
+  "recommendation": {
+    "recommendation": "VISIT WITH CAUTION",
+    "confidence": 0.19,
+    "visit_score": 6.06,
+    "one_line_verdict": "Good food but questionable value",
+    "full_verdict": "Sainath Khanawal in Minal Khanawal, Pune, is a Marathi restaurant that serves good food, with many reviewers praising its quality. However, some reviewers have raised concerns about the value for money and the atmosphere. The service is generally good, but there is room for improvement. Overall, it's a decent option for those seeking traditional Marathi cuisine, but visitors should be aware of the potential drawbacks.",
+    "best_for": [
+      "foodies",
+      "those seeking traditional Marathi cuisine"
+    ],
+    "avoid_if": [
+      "on a tight budget"
+    ],
+    "pros": [
+      {
+        "point": "good food quality",
+        "weight": "High"
+      },
+      {
+        "point": "generally good service",
+        "weight": "Medium"
+      }
+    ],
+    "cons": [
+      {
+        "point": "questionable value for money",
+        "weight": "Medium"
+      },
+      {
+        "point": "atmosphere can be improved",
+        "weight": "Low"
+      }
+    ],
+    "visitor_tips": [
+      "check prices before ordering",
+      "be prepared for a traditional dining experience"
+    ],
+    "best_time": null,
+    "data_reliability": "Medium",
+    "score_breakdown": {
+      "sentiment_score": 8.75,
+      "rating_score": 8.6,
+      "trust_score": 0.0,
+      "composite": 6.06
+    }
+  },
+  "model_info": {
+    "three_model_pipeline": true,
+    "model_1": {
+      "role": "Primary Analyst (Model A)",
+      "provider": "Groq",
+      "sentiment_model": "llama-3.3-70b-versatile",
+      "guardrail_model": "llama-3.1-8b-instant"
+    },
+    "model_2": {
+      "role": "Independent Verifier (Model B)",
+      "provider": "Groq",
+      "model": "llama-3.1-8b-instant",
+      "status": "CORRECTED"
+    },
+    "model_3": {
+      "role": "Executive Verdict (Model C)",
+      "provider": "Groq",
+      "model": "deepseek-r1-distill-llama-70b"
+    },
+    "model_a": {
+      "provider": "Groq",
+      "model": "llama-3.3-70b-versatile",
+      "fast_model": "llama-3.1-8b-instant"
+    },
+    "model_b": {
+      "provider": "Groq",
+      "model": "llama-3.1-8b-instant",
+      "status": "CORRECTED"
+    },
+    "verdict_model": {
+      "provider": "Groq",
+      "model": "deepseek-r1-distill-llama-70b"
+    }
+  }
+}

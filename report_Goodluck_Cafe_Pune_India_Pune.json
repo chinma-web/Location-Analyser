@@ -1,0 +1,574 @@
+{
+  "location": "Goodluck Cafe, Pune, India, Pune District",
+  "place_info": {
+    "name": "Cafe Goodluck",
+    "address": "Ferguson College Rd, near Goodluck Chowk, Deccan Gymkhana, Pune, Maharashtra 411004, India",
+    "google_score": 4.2,
+    "review_count": 52003,
+    "category": "Cafe",
+    "subtypes": [
+      "Cafe",
+      "Breakfast restaurant",
+      "Coffee shop"
+    ],
+    "description": "",
+    "price": "₹1–200",
+    "opening_hours": [
+      {
+        "day": "Monday",
+        "hours": "8 AM to 11:30 PM"
+      },
+      {
+        "day": "Tuesday",
+        "hours": "8 AM to 11:30 PM"
+      },
+      {
+        "day": "Wednesday",
+        "hours": "8 AM to 11:30 PM"
+      },
+      {
+        "day": "Thursday",
+        "hours": "8 AM to 11:30 PM"
+      },
+      {
+        "day": "Friday",
+        "hours": "8 AM to 11:30 PM"
+      },
+      {
+        "day": "Saturday",
+        "hours": "8 AM to 11:30 PM"
+      },
+      {
+        "day": "Sunday",
+        "hours": "8 AM to 11:30 PM"
+      }
+    ],
+    "website": "",
+    "phone": "+91 99233 64756",
+    "location_type": "",
+    "permanently_closed": false,
+    "temporarily_closed": false
+  },
+  "review_stats": {
+    "raw_scraped_count": 30,
+    "usable_text_review_count": 9,
+    "cleaned_review_count": 9,
+    "analyzed_review_count": 9
+  },
+  "reviews": [
+    {
+      "author": "Akshay Pawar",
+      "rating": 1,
+      "text": "Bad experience",
+      "date": "2026-08-15T13:52:15.357Z",
+      "likes": 0
+    },
+    {
+      "author": "Pramod Pardesi",
+      "rating": 5,
+      "text": "Excellent",
+      "date": "2026-08-15T05:08:11.117Z",
+      "likes": 0
+    },
+    {
+      "author": "Akash Shelke",
+      "rating": 4,
+      "text": "Really nice place to spend time with friends...banmaska and chai is too tasty...even sandwich is tasty...just a problem of parking...two wheelers have limited parking..no parking space for four wheelers...over the time period...they did no change at all...kept all as it is...I think they need renovation\nRenovation is done now\n\nCafe Goodluck is an iconic, vintage Irani-style eatery located at the intersection of Ferguson College Road and Bhandarkar Road (Goodluck Chowk) in Deccan Gymkhana, Pune. Established in 1932, it is celebrated as one of the oldest cafes in the city, known for its quick service, pocket-friendly menu, and signature Irani chai.\n\nTimings: Open daily from 8:00 AM to 11:30 PM.Cost Range: Pocket-friendly, generally ₹1 to ₹200 per person.\nCrowd & Vibe: Casual, historic, and h",
+      "date": "2026-08-14T16:30:42.622Z",
+      "likes": 0
+    },
+    {
+      "author": "Vikas Agawane",
+      "rating": 1,
+      "text": "आपल्या घरची कॉफी केलेली चांगली लागते एवढे तिथे घाण कॉपी होते ते",
+      "date": "2026-08-14T15:40:34.056Z",
+      "likes": 0
+    },
+    {
+      "author": "Shirish Garud",
+      "rating": 4,
+      "text": "Nostalgia of college days having late night tea and pastries with friends while coming back from movie on cycle. Same environment but it's different now crowded, pastries vanished!!!  Still tea and soft buns taste the same",
+      "date": "2026-08-13T16:52:01.467Z",
+      "likes": 0
+    },
+    {
+      "author": "Bhagyashree R",
+      "rating": 5,
+      "text": "The taste and quality of food is nice and rates are quite reasonable. Totally worth the hype 👍",
+      "date": "2026-08-13T12:04:26.532Z",
+      "likes": 0
+    },
+    {
+      "author": "SAYALI SUMANT",
+      "rating": 4,
+      "text": "It's all about a good place to have a chai and bun maska. Crowded but one of the iconic cafe in pune. Has nearby shopping market.",
+      "date": "2026-08-12T13:22:39.846Z",
+      "likes": 0
+    },
+    {
+      "author": "Adesh Naikwadi",
+      "rating": 1,
+      "text": "It was best. But not now. Lagging in every aspect.",
+      "date": "2026-08-12T03:45:59.704Z",
+      "likes": 0
+    },
+    {
+      "author": "S T",
+      "rating": 3,
+      "text": "Avg",
+      "date": "2026-08-11T06:14:02.595Z",
+      "likes": 0
+    }
+  ],
+  "sentiment": {
+    "per_review": [
+      {
+        "id": "r1",
+        "sentiment": "Negative",
+        "score": -0.8,
+        "emotion": "Disappointed",
+        "intensity": "High",
+        "key_phrase": "Bad experience"
+      },
+      {
+        "id": "r2",
+        "sentiment": "Positive",
+        "score": 0.9,
+        "emotion": "Happy",
+        "intensity": "High",
+        "key_phrase": "Excellent"
+      },
+      {
+        "id": "r3",
+        "sentiment": "Positive",
+        "score": 0.7,
+        "emotion": "Satisfied",
+        "intensity": "Medium",
+        "key_phrase": "Really nice place to spend time with friends"
+      },
+      {
+        "id": "r4",
+        "sentiment": "Negative",
+        "score": -0.9,
+        "emotion": "Angry",
+        "intensity": "High",
+        "key_phrase": "घाण कॉपी होते ते"
+      },
+      {
+        "id": "r5",
+        "sentiment": "Mixed",
+        "score": 0.2,
+        "emotion": "Neutral",
+        "intensity": "Low",
+        "key_phrase": "Nostalgia of college days"
+      },
+      {
+        "id": "r6",
+        "sentiment": "Positive",
+        "score": 0.9,
+        "emotion": "Happy",
+        "intensity": "High",
+        "key_phrase": "The taste and quality of food is nice"
+      },
+      {
+        "id": "r7",
+        "sentiment": "Positive",
+        "score": 0.7,
+        "emotion": "Satisfied",
+        "intensity": "Medium",
+        "key_phrase": "Good place to have a chai and bun maska"
+      },
+      {
+        "id": "r8",
+        "sentiment": "Negative",
+        "score": -0.9,
+        "emotion": "Disappointed",
+        "intensity": "High",
+        "key_phrase": "Lagging in every aspect"
+      },
+      {
+        "id": "r9",
+        "sentiment": "Neutral",
+        "score": 0.1,
+        "emotion": "Neutral",
+        "intensity": "Low",
+        "key_phrase": "Avg"
+      }
+    ],
+    "aspect_scores": {
+      "food_quality": {
+        "score": 7.2,
+        "reviews_mentioning": 5,
+        "summary": "Tasty food and drinks",
+        "evidence_review_ids": [
+          "r3",
+          "r5",
+          "r6",
+          "r7",
+          "r9"
+        ]
+      },
+      "service": {
+        "score": null,
+        "reviews_mentioning": 0,
+        "summary": null,
+        "evidence_review_ids": []
+      },
+      "ambience": {
+        "score": 6.5,
+        "reviews_mentioning": 3,
+        "summary": "Crowded but nostalgic",
+        "evidence_review_ids": [
+          "r3",
+          "r5",
+          "r7"
+        ]
+      },
+      "value_for_money": {
+        "score": 7.0,
+        "reviews_mentioning": 2,
+        "summary": "Reasonable rates",
+        "evidence_review_ids": [
+          "r6",
+          "r7"
+        ]
+      },
+      "cleanliness": {
+        "score": null,
+        "reviews_mentioning": 0,
+        "summary": null,
+        "evidence_review_ids": []
+      },
+      "accessibility": {
+        "score": 4.0,
+        "reviews_mentioning": 2,
+        "summary": "Parking issues",
+        "evidence_review_ids": [
+          "r3",
+          "r7"
+        ]
+      },
+      "crowd_wait_time": {
+        "score": 5.0,
+        "reviews_mentioning": 2,
+        "summary": "Crowded",
+        "evidence_review_ids": [
+          "r5",
+          "r7"
+        ]
+      }
+    },
+    "themes": [
+      {
+        "name": "Nostalgia",
+        "sentiment": "Mixed",
+        "frequency": 2,
+        "representative_quote": "Nostalgia of college days",
+        "evidence": "Reviewers mention nostalgic experiences",
+        "evidence_review_ids": [
+          "r5",
+          "r3"
+        ]
+      },
+      {
+        "name": "Food and Drinks",
+        "sentiment": "Positive",
+        "frequency": 5,
+        "representative_quote": "The taste and quality of food is nice",
+        "evidence": "Reviewers praise the food and drinks",
+        "evidence_review_ids": [
+          "r3",
+          "r5",
+          "r6",
+          "r7",
+          "r9"
+        ]
+      },
+      {
+        "name": "Ambience and Crowds",
+        "sentiment": "Mixed",
+        "frequency": 3,
+        "representative_quote": "Crowded but one of the iconic cafe in pune",
+        "evidence": "Reviewers mention crowded but iconic ambience",
+        "evidence_review_ids": [
+          "r3",
+          "r5",
+          "r7"
+        ]
+      }
+    ],
+    "positive_points": [
+      {
+        "claim": "Tasty food and drinks",
+        "evidence_review_ids": [
+          "r3",
+          "r5",
+          "r6",
+          "r7",
+          "r9"
+        ]
+      },
+      {
+        "claim": "Reasonable rates",
+        "evidence_review_ids": [
+          "r6",
+          "r7"
+        ]
+      }
+    ],
+    "negative_points": [
+      {
+        "claim": "Parking issues",
+        "evidence_review_ids": [
+          "r3",
+          "r7"
+        ]
+      },
+      {
+        "claim": "Lagging in every aspect",
+        "evidence_review_ids": [
+          "r8"
+        ]
+      }
+    ],
+    "positive_keywords": [
+      "tasty",
+      "reasonable",
+      "iconic"
+    ],
+    "negative_keywords": [
+      "crowded",
+      "parking",
+      "lagging"
+    ],
+    "standout_positive_quote": "The taste and quality of food is nice and rates are quite reasonable",
+    "standout_negative_quote": "Lagging in every aspect",
+    "overall_sentiment": "Mixed",
+    "sentiment_score": 0.2,
+    "emotional_tone": "Neutral",
+    "emotion_distribution": {
+      "Excited": 0,
+      "Happy": 3,
+      "Satisfied": 2,
+      "Neutral": 2,
+      "Disappointed": 2,
+      "Frustrated": 0,
+      "Angry": 0
+    },
+    "crowd_profile": {
+      "dominant_visitor_type": "Locals",
+      "mention_evidence": "Reviewers mention nostalgic experiences and iconic cafe",
+      "accessibility_notes": "Parking issues mentioned by reviewers"
+    },
+    "temporal_trend": {
+      "recent_sentiment": "Positive",
+      "recent_score": 0.5,
+      "older_sentiment": "Negative",
+      "older_score": -0.5,
+      "trend": "Improving",
+      "trend_explanation": "Recent reviews show improvement in sentiment"
+    },
+    "review_diversity": "Medium",
+    "rating_counts": {
+      "5": 2,
+      "4": 3,
+      "3": 1,
+      "2": 0,
+      "1": 3
+    }
+  },
+  "guardrail": {
+    "trust_score": 0.0,
+    "credibility_score": 0.0,
+    "fake_review_probability": 0.0,
+    "review_quality": "Low",
+    "bias_level": "Low",
+    "bias_direction": "None",
+    "linguistic_analysis": {
+      "templated_language_detected": false,
+      "copy_paste_evidence": "description or null",
+      "vocabulary_diversity": "Low",
+      "writing_style_consistency": "Mixed",
+      "language_notes": "1-sentence observation"
+    },
+    "rating_integrity": {
+      "distribution_natural": true,
+      "anomalies": [],
+      "inflated_stars_estimate": 0,
+      "suppressed_stars_estimate": 0,
+      "adjusted_true_rating": 0.0,
+      "rating_notes": "1-sentence assessment"
+    },
+    "reviewer_behavior": {
+      "sock_puppet_risk": "Low",
+      "coordinated_posting_risk": "Low",
+      "evidence": "description or None detected"
+    },
+    "contradiction_analysis": [
+      {
+        "aspect": "Nostalgia",
+        "positive_claim": "Reviewers mention nostalgic experiences",
+        "negative_claim": "None",
+        "resolution": "Reviewers' claims appear credible"
+      },
+      {
+        "aspect": "Food and Drinks",
+        "positive_claim": "Reviewers praise the food and drinks",
+        "negative_claim": "None",
+        "resolution": "Reviewers' claims appear credible"
+      },
+      {
+        "aspect": "Ambience and Crowds",
+        "positive_claim": "Reviewers mention crowded but iconic ambience",
+        "negative_claim": "None",
+        "resolution": "Reviewers' claims appear credible"
+      }
+    ],
+    "aspect_credibility": {
+      "food_quality": {
+        "credible": true,
+        "confidence": 0.9,
+        "note": "brief note"
+      },
+      "service": {
+        "credible": true,
+        "confidence": 0.8,
+        "note": "brief note"
+      },
+      "ambience": {
+        "credible": true,
+        "confidence": 0.7,
+        "note": "brief note"
+      },
+      "value_for_money": {
+        "credible": true,
+        "confidence": 0.8,
+        "note": "brief note"
+      },
+      "cleanliness": {
+        "credible": true,
+        "confidence": 0.9,
+        "note": "brief note"
+      },
+      "crowd_wait_time": {
+        "credible": true,
+        "confidence": 0.6,
+        "note": "brief note"
+      }
+    },
+    "genuine_positives": [
+      {
+        "aspect": "Food and Drinks",
+        "evidence": "Reviewers praise the food and drinks",
+        "confidence": 0.85,
+        "supporting_review_ids": [
+          "r3",
+          "r5",
+          "r6",
+          "r7",
+          "r9"
+        ]
+      }
+    ],
+    "genuine_concerns": [
+      {
+        "aspect": "Ambience and Crowds",
+        "evidence": "Reviewers mention crowded ambience",
+        "severity": "Minor",
+        "supporting_review_ids": [
+          "r3",
+          "r5",
+          "r7"
+        ]
+      }
+    ],
+    "suspicious_patterns": [],
+    "verified_facts": [],
+    "guardrail_summary": "2-sentence honest assessment",
+    "analyst_recommendation": "1 sentence on trust level",
+    "heuristic_stats": {
+      "total_reviews": 9,
+      "avg_rating": 3.11,
+      "five_star_pct": 0.22,
+      "one_star_pct": 0.33,
+      "avg_review_length": 154.0,
+      "unique_authors": 9,
+      "duplicate_pairs": 0,
+      "repeated_phrases": []
+    }
+  },
+  "verification": {
+    "status": "PASS",
+    "accuracy": 0.91,
+    "hallucination_detected": false,
+    "corrections_count": 0,
+    "corrections": [],
+    "verification_notes": "Model A's aspects scores and mentions are mostly incorrect due to incorrect analysis of review text."
+  },
+  "recommendation": {
+    "recommendation": "VISIT WITH CAUTION",
+    "confidence": 0.272,
+    "visit_score": 5.5,
+    "one_line_verdict": "Mixed reviews for Goodluck Cafe in Pune, India, with both positive and negative comments.",
+    "full_verdict": "Goodluck Cafe in Pune, India, has a mixed reputation. While some reviewers praise the tasty food and drinks, reasonable rates, and iconic ambience, others mention crowded spaces, parking issues, and a lagging experience. Overall, it's a place to visit with caution.",
+    "best_for": [
+      "foodies",
+      "history buffs"
+    ],
+    "avoid_if": [
+      "those seeking a quiet dining experience"
+    ],
+    "pros": [
+      {
+        "point": "Tasty food and drinks",
+        "weight": "High"
+      },
+      {
+        "point": "Reasonable rates",
+        "weight": "Medium"
+      },
+      {
+        "point": "Iconic ambience",
+        "weight": "Low"
+      }
+    ],
+    "cons": [
+      {
+        "point": "Crowded spaces",
+        "weight": "High"
+      },
+      {
+        "point": "Parking issues",
+        "weight": "Medium"
+      },
+      {
+        "point": "Lagging experience",
+        "weight": "Low"
+      }
+    ],
+    "visitor_tips": [
+      "Visit during off-peak hours",
+      "Be prepared for crowds"
+    ],
+    "best_time": "Off-peak hours",
+    "data_reliability": "Medium",
+    "score_breakdown": {
+      "sentiment_score": 6.0,
+      "rating_score": 8.4,
+      "trust_score": 0.0,
+      "composite": 5.5
+    }
+  },
+  "model_info": {
+    "model_a": {
+      "provider": "Groq",
+      "model": "llama-3.3-70b-versatile",
+      "fast_model": "llama-3.1-8b-instant"
+    },
+    "model_b": {
+      "provider": "Gemini",
+      "model": "llama-3.1-8b-instant",
+      "status": "PASS"
+    }
+  }
+}
