@@ -26,10 +26,11 @@ dev = [
 ]
 
 [project.scripts]
-location-analyser = "location:main"
+location-analyser = "locan.cli:main"
 
 [tool.setuptools]
-py-modules = ["location", "scoring", "ui_utils"]
+packages = ["locan"]
+py-modules = ["location"]   # backwards-compatibility shim
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

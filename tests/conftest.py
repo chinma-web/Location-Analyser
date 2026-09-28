@@ -17,7 +17,7 @@ def _no_rate_limiting(monkeypatch):
     would sit through minutes of refill waiting.
     """
     monkeypatch.setenv("RATE_LIMIT_DISABLED", "1")
-    import ratelimit
+    from locan import ratelimit
     ratelimit.reset_limiters()
     yield
     ratelimit.reset_limiters()

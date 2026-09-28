@@ -10,8 +10,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-import location as loc_engine
-from ui_utils import esc  # HTML-escape helper for unsafe_allow_html blocks
+import locan as loc_engine
+from locan.ui import esc  # HTML-escape helper for unsafe_allow_html blocks
 
 # Library logs go to the server's stderr with markup stripped, not raw Rich
 # panels dumped into stdout on every rerun.

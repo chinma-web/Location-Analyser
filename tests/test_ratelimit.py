@@ -4,7 +4,9 @@ import time
 
 import pytest
 
-from ratelimit import (
+from locan import llm, sentiment
+from locan import reviews as reviews_mod
+from locan.ratelimit import (
     MODEL_LIMITS,
     ModelRateLimiter,
     NullRateLimiter,
@@ -147,7 +149,6 @@ def _first_review_id(prompt: str) -> int:
     return int(re.search(r"\[r(\d+)\] ⭐", prompt).group(1))
 
 def test_sentiment_batches_run_concurrently_and_stay_ordered(monkeypatch):
-    import location as L
 
     order_seen, lock = [], threading.Lock()
     concurrent, peak = 0, 0
@@ -164,14 +165,14 @@ def test_sentiment_batches_run_concurrently_and_stay_ordered(monkeypatch):
             order_seen.append(first_id)
         return {"sentiment_score": 0.5, "per_review": [{"id": f"r{first_id}"}]}
 
-    monkeypatch.setattr(L, "call_groq", fake_call_groq)
-    monkeypatch.setattr(L, "SENTIMENT_BATCH_SIZE", 5)
-    monkeypatch.setattr(L, "SENTIMENT_MAX_WORKERS", 3)
+    monkeypatch.setattr(llm, "call_groq", fake_call_groq)
+    monkeypatch.setattr(sentiment, "SENTIMENT_BATCH_SIZE", 5)
+    monkeypatch.setattr(sentiment, "SENTIMENT_MAX_WORKERS", 3)
 
-    reviews = L.assign_review_ids(
+    reviews = reviews_mod.assign_review_ids(
         [{"id": "", "rating": 5, "text": f"review {i}"} for i in range(20)]
     )
-    result = L.analyze_sentiment(reviews)
+    result = sentiment.analyze_sentiment(reviews)
 
     assert peak > 1, "batches should overlap, not run strictly serially"
     assert result["rating_counts"]["5"] == 20
@@ -179,7 +180,6 @@ def test_sentiment_batches_run_concurrently_and_stay_ordered(monkeypatch):
 
 def test_batch_results_are_merged_in_submission_order(monkeypatch):
     """Batch 0 holds the newest reviews and supplies the temporal trend."""
-    import location as L
 
     def fake_call_groq(prompt, model=None, max_tokens=0):
         first_id = _first_review_id(prompt)
@@ -188,12 +188,12 @@ def test_batch_results_are_merged_in_submission_order(monkeypatch):
         return {"sentiment_score": 0.5,
                 "temporal_trend": {"trend": "Improving" if first_id == 1 else "Declining"}}
 
-    monkeypatch.setattr(L, "call_groq", fake_call_groq)
-    monkeypatch.setattr(L, "SENTIMENT_BATCH_SIZE", 5)
-    monkeypatch.setattr(L, "SENTIMENT_MAX_WORKERS", 4)
+    monkeypatch.setattr(llm, "call_groq", fake_call_groq)
+    monkeypatch.setattr(sentiment, "SENTIMENT_BATCH_SIZE", 5)
+    monkeypatch.setattr(sentiment, "SENTIMENT_MAX_WORKERS", 4)
 
-    reviews = L.assign_review_ids([{"rating": 4, "text": f"r{i}"} for i in range(15)])
-    result = L.analyze_sentiment(reviews)
+    reviews = reviews_mod.assign_review_ids([{"rating": 4, "text": f"r{i}"} for i in range(15)])
+    result = sentiment.analyze_sentiment(reviews)
     assert result["temporal_trend"]["trend"] == "Improving"
 
 
@@ -206,10 +206,8 @@ def test_batch_results_are_merged_in_submission_order(monkeypatch):
     ("some unrelated failure", None),
 ])
 def test_retry_after_parsing(message, expected):
-    import location as L
-    assert L._retry_after_seconds(message) == expected
+    assert llm._retry_after_seconds(message) == expected
 
 
 def test_retry_after_is_capped():
-    import location as L
-    assert L._retry_after_seconds("try again in 9999s") == 60.0
+    assert llm._retry_after_seconds("try again in 9999s") == 60.0

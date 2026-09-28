@@ -2,7 +2,7 @@
 import re
 from pathlib import Path
 
-from ui_utils import esc
+from locan.ui import esc
 
 PAYLOAD = '<img src=x onerror="alert(1)">'
 

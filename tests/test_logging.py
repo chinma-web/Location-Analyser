@@ -3,12 +3,12 @@ import logging
 
 import pytest
 
-import location as L
+from locan import logging_utils, pipeline
 
 
 def test_markup_is_stripped_for_plain_handlers():
-    assert L.strip_markup("[green]✓ done[/green]") == "✓ done"
-    assert L.strip_markup("[bold red]bad[/bold red] thing") == "bad thing"
+    assert logging_utils.strip_markup("[green]✓ done[/green]") == "✓ done"
+    assert logging_utils.strip_markup("[bold red]bad[/bold red] thing") == "bad thing"
 
 
 @pytest.mark.parametrize("message,level", [
@@ -20,24 +20,24 @@ def test_markup_is_stripped_for_plain_handlers():
 ])
 def test_level_is_inferred_from_the_leading_tag(message, level, caplog):
     with caplog.at_level(logging.DEBUG, logger="locan"):
-        L.log(message)
+        logging_utils.log(message)
     assert caplog.records[-1].levelno == level
 
 
 def test_library_does_not_print_to_stdout(capsys, caplog):
     with caplog.at_level(logging.DEBUG, logger="locan"):
-        L.log("[green]✓ quiet please[/green]")
+        logging_utils.log("[green]✓ quiet please[/green]")
     assert capsys.readouterr().out == ""
 
 
 def test_configure_logging_is_idempotent():
-    L.configure_logging()
-    first = len(L.logger.handlers)
-    L.configure_logging()
-    assert len(L.logger.handlers) == first
+    logging_utils.configure_logging()
+    first = len(logging_utils.logger.handlers)
+    logging_utils.configure_logging()
+    assert len(logging_utils.logger.handlers) == first
 
 
 def test_analyze_does_not_render_the_cli_report_by_default():
     import inspect
-    sig = inspect.signature(L.analyze)
+    sig = inspect.signature(pipeline.analyze)
     assert sig.parameters["render_report"].default is False

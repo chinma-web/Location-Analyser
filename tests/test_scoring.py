@@ -7,7 +7,7 @@ renormalisation, penalties, thresholds, and monotonicity.
 """
 import pytest
 
-from scoring import (
+from locan.scoring import (
     DEFAULT_CONFIG,
     ScoringConfig,
     aspect_component,

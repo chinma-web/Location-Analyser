@@ -36,11 +36,11 @@ jobs:
 
       # No API keys are needed: the suite covers the pure logic only.
       - name: Test
-        run: pytest --cov=scoring --cov=ui_utils --cov-report=term-missing
+        run: pytest --cov=locan --cov-report=term-missing
 
       - name: Check the app imports without credentials
         env:
           APIFY_API_TOKEN: ""
           GROQ_API_KEY: ""
         run: |
-          python -c "import location, scoring, ui_utils; print(location.validate_config(raise_on_error=False))"
+          python -c "import locan, location; print(locan.validate_config(raise_on_error=False))"

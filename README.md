@@ -27,7 +27,7 @@ Scrapes real Google Maps reviews for a place and turns them into an **evidence-b
                      │  only evidence-backed corrections are applied
                      ▼
       ┌──────────────────────────────┐
-      │ scoring.py — pure Python     │  ← the verdict is decided HERE
+      │ locan/scoring.py — pure Py   │  ← the verdict is decided HERE
       │ deterministic, unit-tested   │
       └──────────────┬───────────────┘
                      ▼
@@ -71,9 +71,9 @@ streamlit run app.py
 ### Run the CLI
 
 ```bash
-python location.py "Cafe Goodluck, Pune" 40      # place + max reviews
-python location.py "https://maps.app.goo.gl/..." # or a Maps URL
-python location.py "Eiffel Tower" --no-cache     # bypass the report cache
+python -m locan.cli "Cafe Goodluck, Pune" 40      # place + max reviews
+python -m locan.cli "https://maps.app.goo.gl/..." # or a Maps URL
+python -m locan.cli "Eiffel Tower" --no-cache     # bypass the report cache
 ```
 
 ---
@@ -94,7 +94,7 @@ All settings are environment variables (see `.env.example`):
 | `LOG_LEVEL` | `INFO` | `DEBUG` for per-stage detail |
 
 Scoring weights, verdict thresholds and penalties are **not** environment variables —
-they live in `ScoringConfig` in `scoring.py`, where they can be documented and tested:
+they live in `ScoringConfig` in `locan/scoring.py`, where they can be documented and tested:
 
 ```python
 from scoring import ScoringConfig, score_location
@@ -156,9 +156,24 @@ ruff check .
 
 | Module | Responsibility |
 |---|---|
-| `location.py` | pipeline: scraping, prompts, model calls, merging, caching |
-| `scoring.py` | deterministic scoring — pure, no I/O, no network |
-| `ui_utils.py` | presentation helpers (HTML escaping) |
+| `locan/config.py` | env vars, credential validation, lazy API clients |
+| `locan/logging_utils.py` | markup-aware library logging |
+| `locan/ratelimit.py` | token-bucket pacing for the Groq API |
+| `locan/llm.py` | Groq transport, JSON repair, verifier call |
+| `locan/geo.py` | Photon geocoding, place suggestions, URL expansion |
+| `locan/reviews.py` | stable review IDs, evidence validation, text similarity |
+| `locan/scraper.py` | Apify Google Maps scraping |
+| `locan/sentiment.py` | Model A — batched sentiment |
+| `locan/guardrail.py` | heuristic + LLM red-flag analysis |
+| `locan/verify.py` | Model B — independent verification |
+| `locan/corrections.py` | applying accepted corrections |
+| `locan/scoring.py` | deterministic scoring — pure, no I/O, no network |
+| `locan/pipeline.py` | `analyze()` — the end-to-end run |
+| `locan/report.py` | Rich terminal rendering (CLI only) |
+| `locan/cache.py` | on-disk report cache |
+| `locan/cli.py` | command-line entry point |
+| `locan/ui.py` | presentation helpers (HTML escaping) |
+| `location.py` | backwards-compatibility shim re-exporting `locan` |
 | `app.py` | Streamlit dashboard |
 | `tests/` | pure-logic coverage: scoring, cleaning, heuristics, merging, cache, integrity |
 
