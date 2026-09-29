@@ -49,11 +49,22 @@ tips, and a downloadable JSON report.
 git clone https://github.com/chinma-web/Location-Analyser.git
 cd Location-Analyser
 
+cp .env.example .env        # then add your two API keys
+./start.sh                  # creates .venv, installs deps, starts the app
+```
+
+Then open <http://localhost:8501>. To stop it: `./stop.sh`.
+
+<details>
+<summary>Manual setup instead of the scripts</summary>
+
+```bash
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-
-cp .env.example .env        # then add your two API keys
+cp .env.example .env
+streamlit run app.py
 ```
+</details>
 
 You need two free-tier keys:
 
@@ -65,8 +76,21 @@ You need two free-tier keys:
 ### Run the web app
 
 ```bash
-streamlit run app.py
+./start.sh                      # background; logs to .run/app.log, PID in .run/app.pid
+./start.sh --foreground         # run in this terminal, Ctrl-C to stop
+./start.sh --port 8600          # different port
+./start.sh --skip-install       # fast restart, don't touch the virtualenv
+
+./stop.sh                       # graceful SIGTERM, SIGKILL after 10s
+./stop.sh --force               # straight to SIGKILL
 ```
+
+`start.sh` creates the virtualenv on first run, reinstalls dependencies only when
+`requirements.txt` changes, warns about missing API keys without refusing to start,
+refuses to double-start, and waits for the port to actually accept connections before
+reporting success. `stop.sh` stops the recorded PID and also clears anything else left
+listening on the port (e.g. a `streamlit run` you started by hand); it exits 0 when
+there is nothing to stop, so it is safe in scripts.
 
 ### Run the CLI
 

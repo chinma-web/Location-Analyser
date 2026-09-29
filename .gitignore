@@ -24,6 +24,9 @@ env/
 .idea/
 .vscode/
 
+# start.sh runtime state (PID + logs)
+.run/
+
 # Generated reports / cache
 cache/
 report_*.json
