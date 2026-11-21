@@ -6,3 +6,5 @@ streamlit>=1.30.0
 plotly>=5.18.0
 pandas>=2.0.0
 streamlit-searchbox>=0.1.14
+fastapi>=0.115.0,<1
+uvicorn>=0.30.0,<1

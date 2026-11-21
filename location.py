@@ -8,6 +8,10 @@ Final recommendation: deterministic Python scoring only.
 """
 
 import os, json, time, sys, re
+import hashlib
+from pathlib import Path
+from datetime import datetime, timezone
+from difflib import SequenceMatcher
 import urllib.request
 import urllib.parse
 from collections import Counter
@@ -335,13 +339,33 @@ def get_city_suggestions(query: str, limit: int = 6) -> list:
 
 # ── URL expander ──────────────────────────────────────────────────────────────
 
+def validate_maps_url(url: str) -> str:
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname not in {
+        "www.google.com", "google.com", "maps.google.com", "maps.app.goo.gl", "goo.gl"
+    } or parsed.port not in (None, 443) or parsed.username or parsed.password:
+        raise ValueError("Use an HTTPS Google Maps URL, or enter a place name and city.")
+    if parsed.hostname == "goo.gl" and not parsed.path.startswith("/maps"):
+        raise ValueError("Use a Google Maps link, not another shortened URL.")
+    if parsed.hostname in {"google.com", "www.google.com"} and not parsed.path.startswith("/maps"):
+        raise ValueError("Use a Google Maps place link.")
+    return url
+
+
+class _MapsRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        validate_maps_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 def expand_maps_url(url: str) -> str:
+    validate_maps_url(url)
     try:
         req = urllib.request.Request(
             url,
             headers={"User-Agent": "Mozilla/5.0 (compatible; LocationAnalyzer/1.0)"},
         )
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.build_opener(_MapsRedirectHandler()).open(req, timeout=8) as resp:
             final_url = resp.url
         console.print(f"[dim]🔗 Expanded URL: {final_url[:80]}…[/dim]")
         return final_url
@@ -352,7 +376,7 @@ def expand_maps_url(url: str) -> str:
 
 # ── MODULE 1: Apify Scraper ───────────────────────────────────────────────────
 
-def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
+def scrape_reviews(location: str, max_reviews: int = 40, fast: bool = False) -> tuple:
     """
     Scrape Google Maps reviews for `location` using Apify.
     Returns (reviews, place_info, review_stats).
@@ -369,6 +393,10 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
     is_place_id = location.strip().lower().startswith("place_id:")
 
     if is_url:
+        try:
+            validate_maps_url(location.strip())
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
         expanded = expand_maps_url(location.strip())
         run_input = {
             "startUrls":           [{"url": expanded}],
@@ -386,6 +414,15 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
             "reviewsSort":         "newest",
             "language":            "en",
             "includeOpeningHours": True,
+        }
+    elif fast:
+        # One precise search instead of geocoding and scraping up to five places.
+        run_input = {
+            "searchStringsArray": [location.strip()],
+            "maxCrawledPlaces": 1,
+            "maxReviews": max_reviews,
+            "reviewsSort": "newest",
+            "language": "en",
         }
     else:
         parts       = location.strip().split(",", 1)
@@ -437,7 +474,10 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
             console.print("[red]✗  No places returned by Apify.[/red]")
             return [], {}, _empty_review_stats()
 
-        best = max(all_places, key=lambda p: p.get("reviewsCount") or 0)
+        # Prefer identity similarity, never popularity. Direct URLs resolve one place.
+        query_name = location.split(",", 1)[0].strip().lower()
+        best = max(all_places, key=lambda p: SequenceMatcher(
+            None, query_name, (p.get("title") or "").lower()).ratio())
 
         place_info = {
             "name":               best.get("title") or location,
@@ -476,6 +516,8 @@ def scrape_reviews(location: str, max_reviews: int = 40) -> tuple:
 
         # ── Clean: remove near-duplicates (>70% Jaccard) and obvious spam ──
         cleaned = _clean_reviews(usable)
+        for i, review in enumerate(cleaned):
+            review["id"] = f"r{i+1}"
         cleaned_review_count = len(cleaned)
 
         review_stats = {
@@ -1220,7 +1262,7 @@ RULES: Only correct claims unsupported by review text. Every correction needs ev
         hall     = result.get("hallucination_detected", False)
         n_corr   = len(result.get("corrections", []))
         console.print(
-            f"[green]✓  Model 2 Verifier (Groq): {status}  |  Accuracy: {accuracy:.0%}  |  "
+            f"[green]✓  Model 2 Verifier (Groq): {status}  |  Model-reported agreement: {accuracy if accuracy is not None else 'unknown'}  |  "
             f"Hallucination: {hall}  |  Corrections: {n_corr}[/green]"
         )
         return result
@@ -1238,7 +1280,7 @@ RULES: Only correct claims unsupported by review text. Every correction needs ev
                 hall     = result.get("hallucination_detected", False)
                 n_corr   = len(result.get("corrections", []))
                 console.print(
-                    f"[green]✓  Model 2 Verifier (Groq, 10 reviews): {status}  |  Accuracy: {accuracy:.0%}  |  "
+                    f"[green]✓  Model 2 Verifier (Groq, 10 reviews): {status}  |  Model-reported agreement: {accuracy if accuracy is not None else 'unknown'}  |  "
                     f"Hallucination: {hall}  |  Corrections: {n_corr}[/green]"
                 )
                 return result
@@ -1251,122 +1293,34 @@ RULES: Only correct claims unsupported by review text. Every correction needs ev
 
 
 def _enrich_verification_data(verif: dict, reviews: list, sentiment: dict, guardrail: dict) -> dict:
-    """Ensure all 5 verification fields have valid status and rich observations extracted from reviews."""
+    """Normalize shape without inventing successful audits or accuracy."""
     if not isinstance(verif, dict):
         verif = {}
-
-    v_status = verif.get("verification_status") or verif.get("status") or "PASS"
-    verif["verification_status"] = v_status
-    verif["status"] = v_status
-
-    if verif.get("accuracy") is None:
-        verif["accuracy"] = 0.94
-
-    if verif.get("hallucination_detected") is None:
-        verif["hallucination_detected"] = False
-
-    # Review analytics for ground-truth extraction
-    ratings = [r.get("rating", 0) for r in reviews if r.get("rating")]
-    avg_r = sum(ratings) / len(ratings) if ratings else 0
-    pos_reviews = [r for r in reviews if r.get("rating", 0) >= 4]
-    neg_reviews = [r for r in reviews if r.get("rating", 0) <= 2]
-
-    # 1. Sentiment
-    sent_dict = verif.get("sentiment") if isinstance(verif.get("sentiment"), dict) else {}
-    if not sent_dict.get("status") or sent_dict.get("status") == "UNAVAILABLE":
-        sent_dict["status"] = "PASS"
-    if not sent_dict.get("observations"):
-        overall = sentiment.get("overall_sentiment", "Positive")
-        sent_dict["observations"] = [
-            f"Review ratings average {avg_r:.1f}★ across {len(reviews)} reviews ({len(pos_reviews)} positive, {len(neg_reviews)} critical).",
-            f"Model 1 overall sentiment '{overall}' accurately aligns with reviewer sentiment distribution.",
-        ]
-    if "issues" not in sent_dict:
-        sent_dict["issues"] = []
-    verif["sentiment"] = sent_dict
-
-    # 2. Aspects
-    asp_dict = verif.get("aspects") if isinstance(verif.get("aspects"), dict) else {}
-    if not asp_dict.get("status") or asp_dict.get("status") == "UNAVAILABLE":
-        asp_dict["status"] = "PASS"
-    if not asp_dict.get("observations"):
-        aspect_scores = sentiment.get("aspect_scores", {})
-        asp_obs = []
-        for asp_k, asp_v in list(aspect_scores.items())[:3]:
-            if isinstance(asp_v, dict) and asp_v.get("score") is not None:
-                asp_obs.append(f"{asp_k.replace('_', ' ').title()}: score {asp_v.get('score')}/10 confirmed across {asp_v.get('reviews_mentioning', 1)} review mention(s).")
-        if not asp_obs:
-            asp_obs.append("Food quality, service speed, and ambience dimensions match reviewer statements.")
-        asp_dict["observations"] = asp_obs
-    if "issues" not in asp_dict:
-        asp_dict["issues"] = []
-    verif["aspects"] = asp_dict
-
-    # 3. Keywords
-    kw_dict = verif.get("keywords") if isinstance(verif.get("keywords"), dict) else {}
-    if not kw_dict.get("status") or kw_dict.get("status") == "UNAVAILABLE":
-        kw_dict["status"] = "PASS"
-    if not kw_dict.get("observations"):
-        pos_kw = sentiment.get("positive_keywords", [])[:4]
-        neg_kw = sentiment.get("negative_keywords", [])[:3]
-        kw_obs = []
-        if pos_kw:
-            kw_obs.append(f"Frequent positive terms verified in reviews: {', '.join(pos_kw)}.")
-        if neg_kw:
-            kw_obs.append(f"Criticism terms verified in reviews: {', '.join(neg_kw)}.")
-        if not kw_obs:
-            kw_obs.append("Extracted key terms match natural customer vocabulary in reviews.")
-        kw_dict["observations"] = kw_obs
-    if "issues" not in kw_dict:
-        kw_dict["issues"] = []
-    verif["keywords"] = kw_dict
-
-    # 4. Guardrail
-    gr_dict = verif.get("guardrail") if isinstance(verif.get("guardrail"), dict) else {}
-    if not gr_dict.get("status") or gr_dict.get("status") == "UNAVAILABLE":
-        gr_dict["status"] = "PASS"
-    if not gr_dict.get("observations"):
-        trust_score = guardrail.get("trust_score", 85)
-        fake_prob = guardrail.get("fake_review_probability", 0.05)
-        gr_dict["observations"] = [
-            f"Review authenticity trust score confirmed at {trust_score}% (anomaly probability: {fake_prob:.1%}).",
-            f"Checked {len(reviews)} reviews for repetitive templated phrasing; organic natural reviews confirmed.",
-        ]
-    if "issues" not in gr_dict:
-        gr_dict["issues"] = []
-    verif["guardrail"] = gr_dict
-
-    # 5. Evidence
-    ev_dict = verif.get("evidence") if isinstance(verif.get("evidence"), dict) else {}
-    if not ev_dict.get("status") or ev_dict.get("status") == "UNAVAILABLE":
-        ev_dict["status"] = "PASS"
-    if not ev_dict.get("observations"):
-        ev_dict["observations"] = [
-            f"Direct citations mapped to {min(len(reviews), 20)} review IDs with no hallucinated user claims.",
-            "All pros and cons are substantiated by verifiable reviewer quotes.",
-        ]
-    if "issues" not in ev_dict:
-        ev_dict["issues"] = ev_dict.get("unsupported_claims", [])
-    if "unsupported_claims" not in ev_dict:
-        ev_dict["unsupported_claims"] = []
-    verif["evidence"] = ev_dict
-
+    valid = {"PASS", "CORRECTED", "FAIL", "UNAVAILABLE", "UNKNOWN"}
+    status = verif.get("verification_status", verif.get("status", "UNKNOWN"))
+    status = status if status in valid else "UNKNOWN"
+    verif.update(verification_status=status, status=status)
+    verif.setdefault("accuracy", None)
+    verif.setdefault("hallucination_detected", None)
+    for key in ("sentiment", "aspects", "keywords", "guardrail", "evidence"):
+        section = verif.get(key)
+        if not isinstance(section, dict):
+            section = {}
+        if section.get("status") not in valid:
+            section["status"] = "UNKNOWN"
+        section.setdefault("observations", [])
+        section.setdefault("issues", [])
+        verif[key] = section
     return verif
 
 
 def _unavailable_verification(reason: str) -> dict:
     return {
-        "verification_status": "PASS",
-        "accuracy":            0.92,
-        "reason":              reason,
-        "sentiment":           {"status": "PASS", "observations": [], "issues": []},
-        "aspects":             {"status": "PASS", "observations": [], "issues": []},
-        "keywords":            {"status": "PASS", "observations": [], "issues": []},
-        "guardrail":           {"status": "PASS", "observations": [], "issues": []},
-        "evidence":            {"status": "PASS", "observations": [], "unsupported_claims": [], "issues": []},
-        "hallucination_detected": False,
-        "corrections":         [],
-        "verification_notes":  "Independent review verification completed via direct review extraction.",
+        "verification_status": "UNAVAILABLE", "accuracy": None, "reason": reason,
+        **{key: {"status": "UNAVAILABLE", "observations": [], "issues": []}
+           for key in ("sentiment", "aspects", "keywords", "guardrail", "evidence")},
+        "hallucination_detected": None, "corrections": [],
+        "verification_notes": "Model audit unavailable. Results have not been cross-checked.",
     }
 
 
@@ -1541,7 +1495,7 @@ def calculate_final_score(
     trust_comp  = max(0.0, min(10.0, trust_comp))
 
     # Apply verifier accuracy as a modifier on trust
-    if verification.get("verification_status") not in ("UNAVAILABLE", None):
+    if verification.get("verification_status") in ("PASS", "CORRECTED"):
         verif_accuracy = verification.get("accuracy") or 1.0
         trust_comp     = round(trust_comp * (0.5 + verif_accuracy * 0.5), 2)
         trust_comp     = max(0.0, min(10.0, trust_comp))
@@ -1619,7 +1573,7 @@ def calculate_final_score(
         base_conf = min(1.0, base_conf + 0.1)
         verif_acc = verification.get("accuracy") or 1.0
         base_conf = min(1.0, base_conf * (0.7 + verif_acc * 0.3))
-    elif v_status == "UNAVAILABLE":
+    elif v_status in ("UNAVAILABLE", "UNKNOWN"):
         base_conf = max(0.0, base_conf - 0.1)   # slight penalty without verification
     elif v_status == "CORRECTED":
         base_conf = max(0.0, base_conf - 0.05)
@@ -1842,7 +1796,7 @@ def display_report(location, place_info, reviews, sentiment, guardrail, rec, ver
 
 # ── Main Pipeline ──────────────────────────────────────────────────────────────
 
-def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dict:
+def analyze(location: str, max_reviews: int = 30, progress_callback=None, *, fast: bool = False, force_refresh: bool = False) -> dict:
     """
     Complete two-model pipeline:
       1. Apify — scrape reviews
@@ -1866,32 +1820,30 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
         expand=False,
     ))
 
-    # ── Calculate Cache Filename ──
-    slug     = "".join(c if c.isalnum() or c in " _-" else "" for c in location)[:30].strip()
-    out_file = f"report_{slug.replace(' ', '_')}.json"
-
-    # ── Stage 0: Check Cache (7 days) ──
-    if os.path.exists(out_file):
-        mtime = os.path.getmtime(out_file)
-        if (time.time() - mtime) < 7 * 24 * 3600:
-            console.print(f"[bold green]⚡ Cache Hit:[/bold green] Loading recent report from {out_file}")
+    # Versioned, parameter-aware local cache. Never share an unrelated URL prefix.
+    cache_key = hashlib.sha256(json.dumps({
+        "location": location.strip().lower(), "max_reviews": max_reviews,
+        "fast": fast, "models": [STRONG_MODEL, FAST_MODEL, VERIFIER_MODEL, VERDICT_MODEL],
+        "require_verification": REQUIRE_VERIFICATION, "version": 2,
+    }, sort_keys=True).encode()).hexdigest()
+    cache_dir = Path(".cache/reports")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    out_file = cache_dir / f"{cache_key}.json"
+    if not force_refresh and out_file.exists() and time.time() - out_file.stat().st_mtime < 7 * 86400:
+        try:
+            cached_data = json.loads(out_file.read_text(encoding="utf-8"))
+            cached_data.setdefault("meta", {}).update(cached=True, elapsed_seconds=round(time.time()-t0, 2))
             if progress_callback:
-                progress_callback(1, "Cache Hit", "Loading recent report from cache...")
-                time.sleep(0.5)
-                progress_callback(6, "Complete", "Report loaded from cache.")
-            
-            try:
-                with open(out_file, "r", encoding="utf-8") as f:
-                    cached_data = json.load(f)
-                return cached_data
-            except Exception as e:
-                console.print(f"[yellow]⚠ Cache read failed: {e}. Re-running pipeline.[/yellow]")
+                progress_callback(6, "Saved report ready", "Loaded a matching report from the last seven days.")
+            return cached_data
+        except (ValueError, OSError):
+            pass
 
     # ── Stage 1: Scrape ──
     if progress_callback:
         progress_callback(1, "Scraping Reviews", f"Collecting Google Maps reviews via Apify...")
     try:
-        reviews, place_info, review_stats = scrape_reviews(location, max_reviews)
+        reviews, place_info, review_stats = scrape_reviews(location, max_reviews, fast=fast)
     except RuntimeError as e:
         return {"error": str(e)}
 
@@ -1901,22 +1853,23 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
     # ── Stage 2: Model A — Sentiment (batched over all reviews) ──
     if progress_callback:
         progress_callback(2, "Model A — Sentiment", f"Analyzing {len(reviews)} reviews in batches...")
+    scrape_seconds = round(time.time() - t0, 2)
     sentiment = analyze_sentiment(reviews)
-    time.sleep(1)
+    if not sentiment or not sentiment.get("per_review"):
+        return {"error": "Sentiment analysis was unavailable. Please retry rather than relying on an incomplete score."}
 
     # ── Stage 3: Model A — Guardrail ──
     if progress_callback:
         progress_callback(3, "Model A — Guardrail", "Checking review authenticity and trust score...")
     guardrail = guardrail_analysis(reviews, sentiment)
-    time.sleep(1)
 
     # ── Stage 4: Model B — Independent Verification ──
     if progress_callback:
-        progress_callback(4, "Model B — Verification", "OpenRouter independent verifier checking Model A...")
+        progress_callback(4, "Model B — Verification", "Auditing the analysis against sampled review evidence...")
     verification = verify_analysis(reviews, sentiment, guardrail)
 
     # Handle REQUIRE_VERIFICATION
-    if REQUIRE_VERIFICATION and verification.get("verification_status") == "UNAVAILABLE":
+    if REQUIRE_VERIFICATION and verification.get("verification_status") not in ("PASS", "CORRECTED"):
         return {
             "error": "Independent verification is currently unavailable.",
             "verification": verification,
@@ -1973,9 +1926,9 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
         "guardrail":      verified_guardrail,
         "verification":   {
             **verification,
-            "status":               verification.get("verification_status", "PASS"),
-            "accuracy":             verification.get("accuracy", 0.94),
-            "hallucination_detected": verification.get("hallucination_detected", False),
+            "status":               verification.get("verification_status", "UNKNOWN"),
+            "accuracy":             verification.get("accuracy"),
+            "hallucination_detected": verification.get("hallucination_detected"),
             "corrections_count":    n_corrections,
             "corrections":          verification.get("corrections", []),
             "verification_notes":   verification.get("verification_notes", ""),
@@ -1988,6 +1941,11 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
             "missing_negative_evidence": verification.get("missing_negative_evidence", []),
         },
         "recommendation": rec,
+        "final_scoring": final_scoring,
+        "meta": {"demo": False, "cached": False, "fast": fast,
+                 "collected_at": datetime.now(timezone.utc).isoformat(),
+                 "elapsed_seconds": round(elapsed, 2), "scrape_seconds": scrape_seconds,
+                 "notice": "Newest text reviews only; not a representative sample of all visitors. Model audit covers at most 20 shortened reviews."},
         "model_info": {
             "three_model_pipeline": True,
             "model_1": {
@@ -2000,7 +1958,7 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
                 "role": "Independent Verifier (Model B)",
                 "provider": "Groq",
                 "model": VERIFIER_MODEL,
-                "status": verification.get("verification_status", "PASS"),
+                "status": verification.get("verification_status", "UNKNOWN"),
             },
             "model_3": {
                 "role": "Executive Verdict (Model C)",
@@ -2008,12 +1966,13 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None) -> dic
                 "model": VERDICT_MODEL,
             },
             "model_a": {"provider": "Groq", "model": STRONG_MODEL, "fast_model": FAST_MODEL},
-            "model_b": {"provider": "Groq", "model": VERIFIER_MODEL, "status": verification.get("verification_status", "PASS")},
+            "model_b": {"provider": "Groq", "model": VERIFIER_MODEL, "status": verification.get("verification_status", "UNKNOWN")},
             "verdict_model": {"provider": "Groq", "model": VERDICT_MODEL},
         },
     }
-    with open(out_file, "w", encoding="utf-8") as f:
+    with open(str(out_file) + ".tmp", "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False, default=str)
+    os.replace(str(out_file) + ".tmp", out_file)
     console.print(f"[dim]💾 Report saved → {out_file}[/dim]")
 
     return payload

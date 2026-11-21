@@ -23,3 +23,9 @@ env/
 # IDE
 .idea/
 .vscode/
+
+# Local analysis data and frontend build artifacts
+.cache/
+report_*.json
+node_modules/
+frontend/dist/
