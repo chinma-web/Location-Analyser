@@ -2,8 +2,8 @@
 """
 Location Review AI Analyzer
 Two-Model Architecture:
-  Model A — Groq (llama-3.3-70b-versatile) — Primary analyst
-  Model B — Groq (llama-3.1-8b-instant)    — Independent verifier (different model, same provider)
+  Model A — Groq (openai/gpt-oss-120b) — Primary analyst
+  Model B — Groq (openai/gpt-oss-20b)    — Independent verifier (different model, same provider)
 Final recommendation: deterministic Python scoring only.
 """
 
@@ -34,28 +34,14 @@ except ImportError:
 APIFY_TOKEN  = os.getenv("APIFY_API_TOKEN") or os.getenv("APify_API_TOKEN", "")
 GROQ_KEY     = os.getenv("GROQ_API_KEY", "")
 
-# Model B — Groq llama-3.1-8b-instant (independent verification, proven reliable)
-# Using llama-3.1-8b-instant for Model B (most reliable JSON on Groq)
-# While same model as guardrail, independence comes from: different stage, different context, cross-validation role
-VERIFIER_MODEL = os.getenv("VERIFIER_MODEL", "llama-3.1-8b-instant")
-
-# Apify actor
-ACTOR_ID     = "compass/crawler-google-places"
-
-# ── Groq model assignments ────────────────────────────────────────────────────
-# Spread across two Groq quota buckets to avoid hitting the 70B daily TPD cap.
-#
-#  llama-3.3-70b-versatile : 100K TPD, 14,400 TPM  → Model A sentiment (70B, deep analysis)
-#  llama-3.1-8b-instant    : 500K TPD,  6,000 TPM  → Model A guardrail + Model B verifier (8B, reliable JSON)
-# 
-# Note: Using same model (llama-3.1-8b-instant) for guardrail + verification provides:
-#   • Proven JSON reliability (most stable on Groq)
-#   • Huge quota (500K TPD — plenty for both tasks)
-#   • Independence through: different stage, different context, cross-validation role
-
-STRONG_MODEL  = os.getenv("STRONG_MODEL",  "llama-3.3-70b-versatile")  # Model A sentiment
-FAST_MODEL    = os.getenv("FAST_MODEL",    "llama-3.1-8b-instant")     # guardrail
-VERDICT_MODEL = os.getenv("VERDICT_MODEL", "llama-3.3-70b-versatile")  # Final verdict & explanation
+# Environment overrides remain supported; the live catalog validates availability.
+from model_config import configured_models, resolve_models
+_MODEL_DEFAULTS = configured_models()
+STRONG_MODEL = _MODEL_DEFAULTS["analyst"]
+FAST_MODEL = _MODEL_DEFAULTS["guardrail"]
+VERIFIER_MODEL = _MODEL_DEFAULTS["verifier"]
+VERDICT_MODEL = _MODEL_DEFAULTS["verdict"]
+ACTOR_ID = "compass/crawler-google-places"
 
 REQUIRE_VERIFICATION = os.getenv("REQUIRE_VERIFICATION", "false").lower() == "true"
 
@@ -75,6 +61,14 @@ groq  = Groq(api_key=GROQ_KEY)
 
 # ── Shared Groq helper ────────────────────────────────────────────────────────
 
+def _completion_options(model: str, max_tokens: int) -> dict:
+    options = {"response_format": {"type": "json_object"}, "max_completion_tokens": max_tokens}
+    if model.startswith("openai/gpt-oss-"):
+        # Reasoning shares the completion budget; leave room for JSON output.
+        options.update(reasoning_effort="low", max_completion_tokens=max(4096, max_tokens))
+    return options
+
+
 def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> dict:
     """Call Groq and parse the JSON response. Retries once on parse failure."""
     for attempt in range(2):
@@ -86,7 +80,7 @@ def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> d
                     {"role": "user",   "content": prompt},
                 ],
                 temperature=0.2,
-                max_tokens=max_tokens,
+                **_completion_options(model, max_tokens),
             )
             raw = res.choices[0].message.content.strip()
 
@@ -146,7 +140,7 @@ def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> d
                             {"role": "user",   "content": prompt},
                         ],
                         temperature=0.2,
-                        max_tokens=max_tokens,
+                        **_completion_options(STRONG_MODEL if model != STRONG_MODEL else FAST_MODEL, max_tokens),
                     )
                     raw = res.choices[0].message.content.strip()
                     if raw.startswith("```"):
@@ -172,7 +166,7 @@ def call_groq(prompt: str, model: str = FAST_MODEL, max_tokens: int = 4096) -> d
 
 def call_verifier(system_prompt: str, user_prompt: str, max_tokens: int = 1500) -> dict:
     """
-    Call Model B verifier (Groq with llama-3.1-8b-instant by default — most reliable JSON).
+    Call Model B verifier (Groq with a catalog-selected model).
     Uses Groq's native JSON mode for reliable structured output.
     Returns parsed JSON dict, or raises RuntimeError on failure.
     """
@@ -189,9 +183,10 @@ def call_verifier(system_prompt: str, user_prompt: str, max_tokens: int = 1500) 
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.1,
-            max_tokens=max_tokens,
+            **_completion_options(VERIFIER_MODEL, max_tokens),
         )
-        raw = response.choices[0].message.content.strip()
+        raw = (response.choices[0].message.content or "").strip()
+        raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.DOTALL).strip()
     except Exception as e:
         raise RuntimeError(f"Groq verifier call failed: {e}")
 
@@ -214,127 +209,21 @@ def call_verifier(system_prompt: str, user_prompt: str, max_tokens: int = 1500) 
 
 # ── Geocoder helpers (Photon / komoot) ───────────────────────────────────────
 
-def _photon_request(params: dict, timeout: int = 6) -> dict:
-    url = "https://photon.komoot.io/api/?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode())
-
-
-def geocode_city(city: str) -> tuple:
-    if not city or not city.strip():
-        return None, None
-    try:
-        data = _photon_request({"q": city.strip(), "limit": 1, "lang": "en"})
-        feats = data.get("features", [])
-        if feats:
-            coords = feats[0].get("geometry", {}).get("coordinates", [])
-            if len(coords) == 2:
-                return coords[1], coords[0]
-    except Exception as e:
-        console.print(f"[yellow]City geocode error: {e}[/yellow]")
-    return None, None
-
-
-def get_place_suggestions(query: str, city: str = "", limit: int = 7) -> list:
-    if not query or len(query.strip()) < 2:
-        return []
-
-    q = f"{query.strip()} {city.strip()}" if city.strip() else query.strip()
-    params: dict = {"q": q, "limit": limit * 2, "lang": "en"}
-
-    city_lat, city_lon = None, None
-    if city.strip():
-        city_lat, city_lon = geocode_city(city)
-        if city_lat is not None:
-            params["lat"] = city_lat
-            params["lon"] = city_lon
-
-    try:
-        data = _photon_request(params)
-    except Exception as e:
-        console.print(f"[yellow]Photon autocomplete error: {e}[/yellow]")
-        return []
-
-    city_lower = city.strip().lower()
-    preferred, fallback = [], []
-    seen: set = set()
-
-    for feat in data.get("features", []):
-        props  = feat.get("properties", {})
-        coords = feat.get("geometry", {}).get("coordinates", [None, None])
-        name    = props.get("name", "").strip()
-        p_city  = (props.get("city") or props.get("town") or
-                   props.get("village") or props.get("county") or "").strip()
-        state   = props.get("state", "").strip()
-        country = props.get("country", "").strip()
-
-        if not name:
-            continue
-
-        label_parts  = [p for p in [name, p_city, state, country] if p]
-        display      = ", ".join(label_parts)
-        search_parts = [p for p in [name, p_city, country] if p]
-        search_name  = ", ".join(search_parts) if search_parts else display
-
-        if search_name in seen:
-            continue
-        seen.add(search_name)
-
-        entry = {
-            "display_name": display,
-            "search_name":  search_name,
-            "lat":          coords[1],
-            "lon":          coords[0],
-            "type":         props.get("type", ""),
-            "category":     props.get("osm_key", ""),
-        }
-
-        location_text = f"{name} {p_city} {state} {country}".lower()
-        if city_lower and city_lower in location_text:
-            preferred.append(entry)
-        else:
-            fallback.append(entry)
-
-    combined = preferred + fallback
-    return combined[:limit]
-
+from geocoding import (GeocodingUnavailable, geocode_city,
+                       get_city_suggestions as _city_suggestions,
+                       get_place_suggestions as _place_suggestions)
 
 def get_city_suggestions(query: str, limit: int = 6) -> list:
-    if not query or len(query.strip()) < 2:
-        return []
-
-    params = {"q": query.strip(), "limit": limit * 3, "lang": "en"}
     try:
-        data = _photon_request(params)
-    except Exception as e:
-        console.print(f"[yellow]City suggestions error: {e}[/yellow]")
+        return _city_suggestions(query, limit)
+    except GeocodingUnavailable:
         return []
 
-    city_types = {"city", "town", "village", "municipality", "borough",
-                  "suburb", "district", "county", "state", "administrative"}
-    results, seen = [], set()
-
-    for feat in data.get("features", []):
-        props   = feat.get("properties", {})
-        name    = props.get("name", "").strip()
-        country = props.get("country", "").strip()
-        osm_val = props.get("osm_value", "").lower()
-        osm_key = props.get("osm_key", "").lower()
-
-        if osm_key not in ("place", "boundary") and osm_val not in city_types:
-            continue
-
-        label = f"{name}, {country}" if country else name
-        if label in seen or not name:
-            continue
-        seen.add(label)
-        results.append(label)
-
-        if len(results) >= limit:
-            break
-
-    return results
+def get_place_suggestions(query: str, city: str = "", limit: int = 7) -> list:
+    try:
+        return _place_suggestions(query, city, limit)
+    except GeocodingUnavailable:
+        return []
 
 
 # ── URL expander ──────────────────────────────────────────────────────────────
@@ -1026,7 +915,7 @@ Return ONLY this JSON:
   "analyst_recommendation": "1 sentence on trust level"
 }}"""
 
-    # Guardrail is structured JSON — 8B model is sufficient and saves 70B daily quota
+    # Use the configured fast role for structured guardrail extraction.
     result = call_groq(prompt, model=FAST_MODEL, max_tokens=4096)
     result = _enrich_guardrail_data(result, reviews, sentiment)
 
@@ -1802,11 +1691,17 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None, *, fas
       1. Apify — scrape reviews
       2. Model A (Groq) — sentiment analysis  [batched, all reviews]
       3. Model A (Groq) — guardrail analysis
-      4. Model B (OpenRouter) — independent verification
+      4. Model B (Groq) — limited review audit
       5. apply_corrections — merge verified analysis
       6. Python scoring — deterministic final score + verdict
       7. Groq explanation — prose only, never overrides score
     """
+    global STRONG_MODEL, FAST_MODEL, VERIFIER_MODEL, VERDICT_MODEL
+    selection = resolve_models()
+    STRONG_MODEL = selection["roles"]["analyst"]
+    FAST_MODEL = selection["roles"]["guardrail"]
+    VERIFIER_MODEL = selection["roles"]["verifier"]
+    VERDICT_MODEL = selection["roles"]["verdict"]
     t0 = time.time()
     console.print(Panel(
         f"[bold]Location:[/bold]       {location}\n"
@@ -1945,6 +1840,7 @@ def analyze(location: str, max_reviews: int = 30, progress_callback=None, *, fas
         "meta": {"demo": False, "cached": False, "fast": fast,
                  "collected_at": datetime.now(timezone.utc).isoformat(),
                  "elapsed_seconds": round(elapsed, 2), "scrape_seconds": scrape_seconds,
+                 "model_selection": selection,
                  "notice": "Newest text reviews only; not a representative sample of all visitors. Model audit covers at most 20 shortened reviews."},
         "model_info": {
             "three_model_pipeline": True,

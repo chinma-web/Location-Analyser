@@ -79,12 +79,12 @@ with st.sidebar:
         st.warning("⚠️ Missing API keys in `.env`")
 
     st.markdown("**🧠 Model 1 — Primary Analyst**")
-    st.caption(f"Groq / {os.getenv('STRONG_MODEL','llama-3.3-70b-versatile')} + {os.getenv('FAST_MODEL','llama-3.1-8b-instant')}")
+    st.caption(f"Groq / {os.getenv('STRONG_MODEL','openai/gpt-oss-120b')} + {os.getenv('FAST_MODEL','openai/gpt-oss-20b')}")
     st.markdown("**🔍 Model 2 — Independent Verifier**")
-    verifier_model = os.getenv("VERIFIER_MODEL", "llama-3.1-8b-instant")
+    verifier_model = os.getenv("VERIFIER_MODEL", "openai/gpt-oss-20b")
     st.caption(f"Groq / {verifier_model} (Review Audit)")
     st.markdown("**⚖️ Model 3 — Executive Verdict**")
-    verdict_model = os.getenv("VERDICT_MODEL", "llama-3.3-70b-versatile")
+    verdict_model = os.getenv("VERDICT_MODEL", "openai/gpt-oss-120b")
     st.caption(f"Groq / {verdict_model} (Final Verdict)")
     if not groq_key:
         st.warning("⚠️ GROQ_API_KEY not set")
@@ -232,11 +232,11 @@ if analyze_btn:
 
             STAGE_LABELS = {
                 1: ("Scraping Reviews",             "Collecting Google Maps reviews via Apify…"),
-                2: ("Model 1 — Sentiment Analysis", f"Deep sentiment & aspect analysis (Groq / {os.getenv('STRONG_MODEL','llama-3.3-70b-versatile')})…"),
-                3: ("Model 1 — Guardrail & Trust",  f"Checking review authenticity & trust score (Groq / {os.getenv('FAST_MODEL','llama-3.1-8b-instant')})…"),
-                4: ("Model 2 — Independent Audit",  f"Cross-auditing claims against raw reviews (Groq / {os.getenv('VERIFIER_MODEL','llama-3.1-8b-instant')})…"),
+                2: ("Model 1 — Sentiment Analysis", f"Deep sentiment & aspect analysis (Groq / {os.getenv('STRONG_MODEL','openai/gpt-oss-120b')})…"),
+                3: ("Model 1 — Guardrail & Trust",  f"Checking review authenticity & trust score (Groq / {os.getenv('FAST_MODEL','openai/gpt-oss-20b')})…"),
+                4: ("Model 2 — Independent Audit",  f"Cross-auditing claims against raw reviews (Groq / {os.getenv('VERIFIER_MODEL','openai/gpt-oss-20b')})…"),
                 5: ("Deterministic Scoring",        "Harmonizing verified facts and computing composite score…"),
-                6: ("Model 3 — Executive Verdict",  f"Synthesizing final verdict and recommendations (Groq / {os.getenv('VERDICT_MODEL','llama-3.3-70b-versatile')})…"),
+                6: ("Model 3 — Executive Verdict",  f"Synthesizing final verdict and recommendations (Groq / {os.getenv('VERDICT_MODEL','openai/gpt-oss-120b')})…"),
             }
 
             def handle_progress(stage, title, desc):
@@ -299,9 +299,9 @@ if "report_data" in st.session_state and st.session_state["report_data"]:
     m2 = model_info.get("model_2", model_info.get("model_b", {}))
     m3 = model_info.get("model_3", model_info.get("verdict_model", {}))
     
-    m1_desc = f"{m1.get('provider','Groq')} / {m1.get('sentiment_model', m1.get('model', os.getenv('STRONG_MODEL','llama-3.3-70b-versatile')))}"
-    m2_desc = f"{m2.get('provider','Groq')} / {m2.get('model', os.getenv('VERIFIER_MODEL','llama-3.1-8b-instant'))}"
-    m3_desc = f"{m3.get('provider','Groq')} / {m3.get('model', os.getenv('VERDICT_MODEL','llama-3.3-70b-versatile'))}"
+    m1_desc = f"{m1.get('provider','Groq')} / {m1.get('sentiment_model', m1.get('model', os.getenv('STRONG_MODEL','openai/gpt-oss-120b')))}"
+    m2_desc = f"{m2.get('provider','Groq')} / {m2.get('model', os.getenv('VERIFIER_MODEL','openai/gpt-oss-20b'))}"
+    m3_desc = f"{m3.get('provider','Groq')} / {m3.get('model', os.getenv('VERDICT_MODEL','openai/gpt-oss-120b'))}"
 
     st.markdown(
         f'<div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;'

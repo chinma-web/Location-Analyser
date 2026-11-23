@@ -95,3 +95,17 @@ cd frontend && npm run build
 Tests cover honest demo labeling, citation resolution, API input/error behavior, unavailable-verifier handling, Google Maps URL validation, single-place quick-scan requests, cache parameters, and forced refresh. No tests spend provider credits.
 
 To launch the original UI: `streamlit run app.py` (requires live credentials).
+
+## City/place autocomplete and Groq model selection
+
+Live search now offers separate **City / Area** and **Place / Business** comboboxes, plus a Maps-link mode. Suggestions use the existing Photon logic extracted into the shared, key-free `geocoding.py` module. The engine retains compatibility wrappers for the legacy Streamlit UI. FastAPI endpoints:
+
+- `GET /api/suggestions/cities?q=Pu`
+- `GET /api/suggestions/places?q=Cafe&city=Pune`
+- `GET /api/models` — effective role preferences and catalog verification status
+
+Suggestions are debounced, cancel stale browser requests, support keyboard navigation, and report provider failure separately from zero matches. Changing the city clears the old place. Photon responses are cached for five-minute buckets with a bounded in-memory cache. Manual entry works when the provider is unavailable. No paid-provider keys are needed for geocoding, but the backend needs outbound access to `photon.komoot.io`. Photon uses OpenStreetMap data and is not an authoritative Google Place ID resolver; always confirm the resulting business name/address.
+
+Defaults now prefer **`openai/gpt-oss-120b`** for analysis/explanation and **`openai/gpt-oss-20b`** for guardrail work. The verifier first checks for the exact requested **`qwen/qwen3.8-27b`**, then `qwen/qwen3-32b`, then supported GPT-OSS/Llama fallbacks. **The requested Qwen ID is not assumed to exist.** Explicit `.env` role overrides take precedence when present in Groq's active model catalog. An unavailable override falls back to a supported catalog entry with a diagnostic note. If the catalog cannot be checked, configured/default IDs remain explicitly unverified; if it contains no supported model, the selection fails with a configuration message. The catalog result is cached in memory for five minutes.
+
+Groq calls use JSON-object output and completion-token limits, with low reasoning effort and additional output headroom for GPT-OSS. Existing `.env` files are not overwritten: remove old Llama overrides or replace them to use the new defaults. **Model listing cannot establish free-tier billing eligibility or remaining quota.** This app does not claim that any listed model is free for a particular account. Analysis settings show the selected role lineup and verification status; live reports record the selection metadata.

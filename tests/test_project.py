@@ -13,6 +13,8 @@ client = TestClient(server.app)
 def engine(monkeypatch):
     monkeypatch.setenv('APIFY_API_TOKEN', 'test-token')
     monkeypatch.setenv('GROQ_API_KEY', 'test-key')
+    import model_config
+    monkeypatch.setattr(model_config, 'fetch_catalog', lambda: None)
     if 'location' not in sys.modules:
         importlib.import_module('location')
     return sys.modules['location']
@@ -110,3 +112,70 @@ def test_api_rejects_concurrent_jobs(monkeypatch):
     monkeypatch.setenv('GROQ_API_KEY','test-key')
     monkeypatch.setattr(server,'jobs',{'running':{'status':'running','created':time.time()}})
     assert client.post('/api/analyze',json={'location':'Cafe, Pune'}).status_code == 409
+
+
+def test_suggestions_work_without_paid_credentials(monkeypatch):
+    for name in ['APIFY_API_TOKEN','APify_API_TOKEN','GROQ_API_KEY']:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(server.geocoding,'get_city_suggestions',lambda q,limit:['Pune, Maharashtra, India'])
+    calls=[]
+    def suggestions(q,city,limit):
+        calls.append((q,city,limit))
+        return [{'display_name':'Cafe, Pune, India','search_name':'Cafe, Pune, India','lat':18.5,'lon':73.8}]
+    monkeypatch.setattr(server.geocoding,'get_place_suggestions',suggestions)
+    assert client.get('/api/suggestions/cities?q=Pu').json()['items']==['Pune, Maharashtra, India']
+    result=client.get('/api/suggestions/places',params={'q':'Cafe','city':'Pune','limit':4})
+    assert result.status_code==200
+    assert result.json()['items'][0]['lat']==18.5
+    assert calls==[('Cafe','Pune',4)]
+    assert client.get('/api/suggestions/cities?q=P').status_code==422
+    assert client.get('/api/suggestions/places?q=Cafe&limit=100').status_code==422
+
+
+def test_suggestion_provider_failure_is_not_empty_success(monkeypatch):
+    def unavailable(*a):
+        raise server.geocoding.GeocodingUnavailable('City lookup is temporarily unavailable.')
+    monkeypatch.setattr(server.geocoding,'get_city_suggestions',unavailable)
+    assert client.get('/api/suggestions/cities?q=Pu').status_code==503
+
+
+def test_model_selection_respects_catalog_and_overrides(monkeypatch):
+    import model_config as models
+    for env in models.ENV.values():
+        monkeypatch.delenv(env, raising=False)
+    monkeypatch.setattr(models,'fetch_catalog',lambda:{'openai/gpt-oss-120b','openai/gpt-oss-20b','qwen/qwen3-32b'})
+    result=models.resolve_models()
+    assert result['catalog_verified']
+    assert result['roles']=={'analyst':'openai/gpt-oss-120b','guardrail':'openai/gpt-oss-20b','verifier':'qwen/qwen3-32b','verdict':'openai/gpt-oss-120b'}
+    monkeypatch.setenv('VERIFIER_MODEL','qwen/qwen3.8-27b')
+    result=models.resolve_models()
+    assert result['roles']['verifier']=='qwen/qwen3-32b'
+    assert 'unavailable' in result['notes'][0]
+    monkeypatch.setattr(models,'fetch_catalog',lambda:{'qwen/qwen3.8-27b','openai/gpt-oss-20b'})
+    result=models.resolve_models()
+    assert result['roles']['verifier']=='qwen/qwen3.8-27b'
+    assert result['roles']['analyst']=='openai/gpt-oss-20b'
+
+
+def test_model_catalog_failure_does_not_claim_free_access(monkeypatch):
+    import model_config as models
+    monkeypatch.setattr(models,'fetch_catalog',lambda:None)
+    result=client.get('/api/models').json()
+    assert not result['catalog_verified']
+    assert 'unverified' in result['notes'][0]
+
+
+def test_model_catalog_without_supported_models_fails(monkeypatch):
+    import model_config as models
+    for env in models.ENV.values():
+        monkeypatch.delenv(env, raising=False)
+    monkeypatch.setattr(models,'fetch_catalog',lambda:{'whisper-large-v3'})
+    assert client.get('/api/models').status_code==503
+
+
+def test_reasoning_model_completion_budget(engine):
+    options=engine._completion_options('openai/gpt-oss-120b',1500)
+    assert options['reasoning_effort']=='low'
+    assert options['max_completion_tokens']>=4096
+    assert options['response_format']=={'type':'json_object'}
+    assert 'reasoning_effort' not in engine._completion_options('qwen/qwen3-32b',2000)

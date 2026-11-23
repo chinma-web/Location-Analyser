@@ -4,10 +4,12 @@ import time
 import uuid
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from api.demo import demo_report
+import geocoding
+import model_config
 
 load_dotenv()
 app = FastAPI(title='Placewise academic demo')
@@ -27,6 +29,27 @@ def health():
 @app.get('/api/demo')
 def demo():
     return demo_report()
+
+@app.get('/api/suggestions/cities')
+def cities(q: str = Query(min_length=2, max_length=120), limit: int = Query(default=6, ge=1, le=8)):
+    try:
+        return {'items': geocoding.get_city_suggestions(q.strip(), limit)}
+    except geocoding.GeocodingUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+@app.get('/api/suggestions/places')
+def places(q: str = Query(min_length=2, max_length=160), city: str = Query(default='', max_length=160), limit: int = Query(default=7, ge=1, le=8)):
+    try:
+        return {'items': geocoding.get_place_suggestions(q.strip(), city.strip(), limit)}
+    except geocoding.GeocodingUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+@app.get('/api/models')
+def models():
+    try:
+        return model_config.resolve_models()
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
 
 def run_job(job_id, request):
     def progress(stage, title, detail):
