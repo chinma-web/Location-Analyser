@@ -21,6 +21,7 @@ class AnalyzeRequest(BaseModel):
     location: str = Field(min_length=3, max_length=500)
     fast: bool = True
     refresh: bool = False
+    max_reviews: int | None = Field(default=None, ge=10, le=100, multiple_of=5)
 
 @app.get('/api/health')
 def health():
@@ -57,7 +58,7 @@ def run_job(job_id, request):
             jobs[job_id].update(stage=stage, title=title, detail=detail)
     try:
         import location
-        result = location.analyze(request.location.strip(), 15 if request.fast else 40,
+        result = location.analyze(request.location.strip(), request.max_reviews if request.max_reviews is not None else (15 if request.fast else 40),
                                   progress_callback=progress, fast=request.fast, force_refresh=request.refresh)
         with lock:
             if result.get('error'):

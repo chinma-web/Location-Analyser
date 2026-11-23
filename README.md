@@ -77,7 +77,7 @@ The API runs one live analysis at a time, keeps job state in memory for up to an
 ## Trust and limitations
 
 - Missing/failed audits remain `UNKNOWN` or `UNAVAILABLE`; they must not turn into a fabricated PASS or accuracy percentage.
-- Live audits cover at most 20 shortened reviews and use a model from the same provider. They are limited cross-checks, not independent factual validation.
+- Live audits process full-review batches and use a model from the same provider. Failed or incomplete batches remain explicitly unavailable. They are limited cross-checks, not independent factual validation.
 - Sentiment and factor scores are model judgments. A deterministic formula is reproducible but not scientifically calibrated.
 - Newest-first reviews are not representative of all visitors. Review count is limited by text availability and deduplication.
 - Quick scan favors speed over breadth; specific input is important.
@@ -109,3 +109,36 @@ Suggestions are debounced, cancel stale browser requests, support keyboard navig
 Defaults now prefer **`openai/gpt-oss-120b`** for analysis/explanation and **`openai/gpt-oss-20b`** for guardrail work. The verifier first checks for the exact requested **`qwen/qwen3.8-27b`**, then `qwen/qwen3-32b`, then supported GPT-OSS/Llama fallbacks. **The requested Qwen ID is not assumed to exist.** Explicit `.env` role overrides take precedence when present in Groq's active model catalog. An unavailable override falls back to a supported catalog entry with a diagnostic note. If the catalog cannot be checked, configured/default IDs remain explicitly unverified; if it contains no supported model, the selection fails with a configuration message. The catalog result is cached in memory for five minutes.
 
 Groq calls use JSON-object output and completion-token limits, with low reasoning effort and additional output headroom for GPT-OSS. Existing `.env` files are not overwritten: remove old Llama overrides or replace them to use the new defaults. **Model listing cannot establish free-tier billing eligibility or remaining quota.** This app does not claim that any listed model is free for a particular account. Analysis settings show the selected role lineup and verification status; live reports record the selection metadata.
+
+## Complete analysis views (Streamlit parity)
+
+The React interface now includes all six original Streamlit report areas: **Executive verdict, Deep sentiment, Authenticity, Visitor guide, Verification & audit, and Raw data & export**. The colorful overview remains a summary; it no longer substitutes for the detailed report. Use the report tabs or sidebar to open the complete lists, charts, model diagnostics, evidence, and raw data. Collection counts, audit status, model roles, confidence, reliability, and expandable place metadata are visible across sections. See [`docs/frontend-parity.md`](docs/frontend-parity.md) for the feature-by-feature mapping and intentional accuracy safeguards.
+
+The original **10–100 review limit (step 5)** is restored in Analysis settings and passed through FastAPI. Quick scan still presets 15 and deep search 40; either can use a custom review limit. Selecting a tab does not perform another scrape. Charts support hover details, expansion, SVG downloads, and readable values. Raw reviews support search, sorting, pagination, and filtered CSV download in addition to lossless full-report JSON export.
+
+### Browser regression tests
+
+With the Python API running on port 8000:
+
+```bash
+cd frontend
+npm ci
+npx playwright install chromium
+npm run test:e2e
+```
+
+Playwright starts or reuses the Vite server on port 5173. Tests use the fictional demo and mocked live submissions, not paid provider calls. The optional `CHROMIUM_EXECUTABLE_PATH` environment variable selects an existing Chromium executable. Test artifacts are ignored by Git.
+
+## Elaborate, coverage-first analysis
+
+Review text is no longer clipped to 800 characters at collection or 350/120/150 characters at later stages. Sentiment and guardrail passes read every cleaned text review in count/character-budgeted batches; oversized individual reviews are kept intact rather than silently clipped. Per-review sentiment must include grounded topic observations and quotes found in that review. Missing/duplicate IDs, invalid scores, or ungrounded quotes trigger one corrective retry and then an explicit error, not a partial result presented as complete.
+
+A topic inventory preserves positive, negative, neutral, and mixed observations, including a complaint inside a positive review and topics appearing after review 20. All batch aspect summaries, crowd/accessibility notes and evidence IDs survive aggregation. Sentiment averages use per-review scores; aspect aggregation is mention-weighted. Date-based trends use all available scored, dated reviews and require at least six reviews spanning seven days.
+
+Guardrail and verification also process all review batches. Audit coverage is acknowledged per batch; a failed batch prevents a global PASS. Global heuristic checks include the entire cleaned sample. Automated checks cannot establish factual authenticity or independently validate semantic correctness.
+
+The explanation model receives the complete topic inventory and points, rather than a top-three/top-five excerpt. It is asked for a substantive balanced verdict and a detailed assessment and visitor-guide entry for every extracted topic, with review IDs, frequency, trade-offs, visitor fit and unknowns. If a topic is omitted, synthesis is retried once. Remaining omissions are marked as such: source-derived evidence stays visible, but missing advice is not invented. Python still owns the numerical verdict/score.
+
+Use **Review & topic coverage** to inspect processing counts and missing narrative topics, **Executive verdict** for the topic-by-topic assessment, **Deep sentiment** for all original topic observations, and **Visitor guide** for topic-specific guidance. These checks establish processing coverage, not a guarantee that a model found every possible interpretation of every review.
+
+This deliberately increases model calls/output compared with the old sampled pipeline, particularly for 40–100 reviews. The quick scan still limits collection by default, and the versioned cache avoids repeat work. Live generation quality and account rate limits must be evaluated with configured provider keys; offline tests use mocks and the explicitly fictional demo.
